@@ -1,0 +1,28 @@
+# Arm 0: the baseline everything is measured against.
+# Runs on CPU for smoke tests; GPU Session A for real numbers.
+experiment: baseline_yolo26_bytetrack
+device: cuda        # override to cpu for smoke tests
+
+detector:
+  name: yolo26s            # ultralytics; try yolo26m as a second baseline point
+  weights: pretrained     # COCO-pretrained; fine-tune later ONLY if accuracy gap demands it
+  imgsz: 640
+  conf: 0.25
+  iou: 0.45
+
+tracker:
+  name: bytetrack         # or: ocsort
+  # ByteTrack has no learned weights (motion-only) -> nothing to train
+
+streaming:
+  frame_cache: false      # baseline = detect every frame
+  stride: 1
+
+data:
+  dataset: sportsmot      # or: soccernet-tracking
+  split: test
+  max_clips: 5            # smoke: 1 clip; Session A: full split
+
+benchmark:
+  metrics: [fps, latency_p50, latency_p95, map, mota, vram_mb, watts]
+  save_to: results/baseline_yolo26s_bytetrack.json

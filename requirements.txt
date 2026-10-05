@@ -1,0 +1,37 @@
+# Core (CPU-installable; GPU torch comes from pytorch.org for your CUDA version)
+torch
+torchvision
+numpy
+opencv-python
+pyyaml
+tqdm
+pillow
+
+# Detection / tracking
+ultralytics          # YOLO26. AGPL-3.0. pip install ultralytics
+# rt-detr: use the official PaddlePaddle or lyuwenyu pytorch port (see docs)
+boxmot               # ByteTrack / OC-SORT implementations (falls back to built-in IoU)
+lap                  # linear assignment for MOT metrics
+scipy
+
+# Efficient ViT backbones
+timm                 # has TinyViT + many efficient ViTs with pretrained weights
+# MobileViT: apple/ml-cvnets on GitHub (clone separately; not on PyPI)
+
+# Export / optimization (TensorRT installed per NVIDIA docs; GPU machine only)
+onnx
+onnxruntime
+# tensorrt            # uncomment on the GPU machine only
+
+# Metrics / eval
+motmetrics           # MOTA/MOTP for tracking eval
+
+# UI
+streamlit
+plotly               # tradeoff curves in the demo app
+pandas
+
+# Dev
+pytest
+black
+ruff
