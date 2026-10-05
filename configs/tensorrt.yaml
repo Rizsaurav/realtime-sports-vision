@@ -1,0 +1,23 @@
+# Arm 3: TensorRT engines. GPU SESSIONS B+C ONLY.
+# TensorRT engines are GPU-architecture-specific: build ON the H100, reuse forever.
+experiment: tensorrt_precision_study
+device: cuda   # mandatory
+
+# Build one engine per (backbone x precision). Reuse across all later runs.
+engines:
+  backbones: [yolo26s, mobilevit_s, tinyvit_5m]
+  precisions: [fp16, fp8, int8]     # fp32 measured in PyTorch baseline; skip TRT fp32
+  workspace_gb: 4
+  calib_dataset: sportsmot          # 500 images for INT8/FP8 calibration
+  save_to: engines/
+
+benchmark:
+  # Full cross product → the tradeoff curves for the report
+  metrics: [fps, latency_p50, latency_p95, map, mota, vram_mb, watts]
+  batch_sizes: [1, 4]              # bs=1 = real-time streaming; bs=4 = throughput ceiling
+  save_to: results/trt_precision_study.json
+
+notes: >
+  FP8 is the headline knob on H100 (native FP8 tensor cores).
+  INT8 needs calibration data and can cost accuracy on small players/ball:
+  that accuracy delta is itself a publishable finding.

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Data (large; re-downloadable via scripts/download_data.sh)
+data/raw/
+data/processed/
+*.mp4
+*.avi
+*.mkv
+
+# Results and engines (regenerable; keep the JSONs, they're the proof)
+results/
+engines/
+*.onnx
+*.engine
+*.trt
+
+# UI / demo artifacts
+*.log
+.streamlit/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
