@@ -1,0 +1,29 @@
+# Arm 1+2: THE NOVEL BIT. Efficient-ViT backbone + frame feature caching.
+# This is the experiment no public repo has published.
+experiment: efficient_vit_streaming
+
+detector:
+  # Two backbone variants to compare; both via timm / ml-cvnets with pretrained weights
+  variants:
+    - { backbone: mobilevit_s, source: ml-cvnets }
+    - { backbone: tinyvit_5m,  source: timm }
+  imgsz: 640
+  conf: 0.25
+
+tracker:
+  name: bytetrack
+
+streaming:
+  frame_cache: true
+  cache_kind: yolov_style        # cache backbone features on keyframes (k=3),
+                                # reuse for intermediate frames; see src/streaming/cache.py
+  keyframe_interval: 3
+
+data:
+  dataset: sportsmot
+  split: test
+
+benchmark:
+  metrics: [fps, latency_p50, latency_p95, map, mota, vram_mb, watts]
+  compare_against: results/baseline_yolo26s_bytetrack.json   # the delta IS the paper
+  save_to: results/efficient_vit_cached.json
