@@ -26,3 +26,4 @@ engines/
 .DS_Store
 .idea/
 .vscode/
+weights/
