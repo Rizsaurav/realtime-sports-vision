@@ -132,6 +132,14 @@ def gpu_stats():
             watts = pynvml.nvmlDeviceGetPowerUsage(h) / 1000.0
         except Exception:
             watts = None
-        return {"vram_mb": round(mem.used / 1024 ** 2, 1), "watts": watts}
+        out = {"vram_mb": round(mem.used / 1024 ** 2, 1), "watts": watts}
+        try:  # this process's peak (device-wide "used" includes other jobs)
+            import torch
+            if torch.cuda.is_available():
+                out["vram_peak_mb"] = round(
+                    torch.cuda.max_memory_reserved() / 1024 ** 2, 1)
+        except Exception:
+            pass
+        return out
     except Exception:
         return {}

@@ -1,10 +1,10 @@
 # Arm 0: the baseline everything is measured against.
 # Runs on CPU for smoke tests; GPU Session A for real numbers.
-experiment: baseline_yolo26_bytetrack
+experiment: baseline_rtdetr_bytetrack
 device: cuda        # override to cpu for smoke tests
 
 detector:
-  name: yolo26s            # ultralytics; try yolo26m as a second baseline point
+  name: rtdetr            # ultralytics; try yolo26m as a second baseline point
   weights: pretrained     # COCO-pretrained; fine-tune later ONLY if accuracy gap demands it
   imgsz: 640
   conf: 0.25
@@ -26,4 +26,4 @@ data:
 
 benchmark:
   metrics: [fps, latency_p50, latency_p95, map, mota, vram_mb, watts]
-  save_to: results/baseline_yolo26s_bytetrack.json
+  save_to: results/baseline_rtdetr_bytetrack.json
