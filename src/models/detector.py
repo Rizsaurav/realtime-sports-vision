@@ -16,9 +16,10 @@ import numpy as np
 
 class Detector:
     def __init__(self, name="yolo26s", imgsz=640, conf=0.25, device="cpu",
-                 classes=None, iou=None):
+                 classes=None, iou=None, weights=None):
         self.classes = classes  # e.g. [0] = person only (SportsMOT GT is players)
         self.iou = iou
+        self.weights = None if weights in (None, "pretrained") else weights
         self.name = name
         self.imgsz = imgsz
         self.conf = conf
@@ -39,7 +40,7 @@ class Detector:
         from ultralytics import YOLO
         model_id = {"yolo26n": "yolo26n.pt", "yolo26s": "yolo26s.pt",
                     "yolo26m": "yolo26m.pt", "rtdetr": "rtdetr-l.pt"}[self.name]
-        self._model = YOLO(model_id)
+        self._model = YOLO(self.weights or model_id)
         # ultralytics handles device placement per-predict call
 
     def infer(self, frame):

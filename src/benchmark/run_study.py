@@ -39,7 +39,8 @@ def run_study(config_path, mode="full", force_cpu=False):
     dcfg, tcfg = cfg["detector"], cfg["tracker"]
     detector = Detector(dcfg["name"], imgsz=dcfg.get("imgsz", 640),
                         conf=dcfg.get("conf", 0.25), device=device,
-                        classes=dcfg.get("classes"), iou=dcfg.get("iou"))
+                        classes=dcfg.get("classes"), iou=dcfg.get("iou"),
+                        weights=dcfg.get("weights"))
 
     data_cfg = cfg["data"]
     dataset = SportsMOT(split=data_cfg.get("split", "test"))
