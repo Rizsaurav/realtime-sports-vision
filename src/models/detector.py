@@ -15,7 +15,10 @@ import numpy as np
 
 
 class Detector:
-    def __init__(self, name="yolo26s", imgsz=640, conf=0.25, device="cpu"):
+    def __init__(self, name="yolo26s", imgsz=640, conf=0.25, device="cpu",
+                 classes=None, iou=None):
+        self.classes = classes  # e.g. [0] = person only (SportsMOT GT is players)
+        self.iou = iou
         self.name = name
         self.imgsz = imgsz
         self.conf = conf
@@ -45,7 +48,9 @@ class Detector:
         if self.name in ("mobilevit_s", "tinyvit_5m"):
             return self._model.infer(frame)
         res = self._model.predict(frame, imgsz=self.imgsz, conf=self.conf,
-                                  device=self.device, verbose=False)[0]
+                                  device=self.device, classes=self.classes,
+                                  verbose=False,
+                                  **({"iou": self.iou} if self.iou else {}))[0]
         out = []
         if res.boxes is not None and len(res.boxes):
             boxes = res.boxes.xyxy.cpu().numpy()

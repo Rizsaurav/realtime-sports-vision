@@ -9,5 +9,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     ap.add_argument("--mode", default="full", choices=["full", "smoke"])
+    ap.add_argument("--cpu", action="store_true",
+                    help="Force CPU regardless of mode (same as --mode smoke for device)")
     args = ap.parse_args()
-    run_study(args.config, args.mode)
+    run_study(args.config, args.mode, force_cpu=args.cpu)

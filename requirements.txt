@@ -24,7 +24,12 @@ onnxruntime
 # tensorrt            # uncomment on the GPU machine only
 
 # Metrics / eval
-motmetrics           # MOTA/MOTP for tracking eval
+motmetrics           # legacy MOTA path (kept for unit tests)
+trackers             # roboflow: TrackEval-compatible HOTA/CLEAR/Identity (`trackers eval`)
+torchmetrics         # COCO mAP
+faster-coco-eval     # COCO mAP backend for torchmetrics
+zeus-ml              # per-run GPU energy via the NVML energy counter
+pynvml               # VRAM + watt sampling on NVIDIA GPUs (optional; metrics degrade gracefully without it)
 
 # UI
 streamlit

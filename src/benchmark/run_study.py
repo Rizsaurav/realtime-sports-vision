@@ -1,103 +1,114 @@
 """Tradeoff-study runner: executes one config end-to-end, writes results JSON.
 
 Usage:
-    python scripts/run_benchmark.py --config configs/baseline.yaml --mode smoke
+    python scripts/run_benchmark.py --config configs/baseline.yaml --mode smoke --cpu
     python scripts/run_benchmark.py --config configs/tensorrt.yaml   # GPU only
 
-Smoke mode: 1 clip, few frames, CPU -> validates plumbing for $0.
+Smoke mode: 1 clip, 30 frames, CPU -> validates plumbing for $0.
 Full mode:  the numbers that go in the report (GPU sessions A/C).
 
-Every run writes results/<experiment>.json — the artifact of record.
+Accuracy: HOTA/DetA/AssA/IDF1/MOTA from roboflow `trackers eval` (TrackEval-
+compatible) and COCO mAP from torchmetrics (faster_coco_eval). Speed: see
+benchmark/timing.py (warmup + repeats + contention flags + Zeus energy).
+Every run writes the results JSON in cfg["benchmark"]["save_to"].
 """
 
 import json
+import shutil
 import yaml
 from pathlib import Path
+
+import cv2
 
 from data import SportsMOT
 from models.detector import Detector
 from tracking.tracker import Tracker
-from streaming.pipeline import StreamingPipeline
-from streaming.cache import FrameFeatureCache
-from benchmark.metrics import (compute_detection_metrics,
-                               compute_tracking_metrics, gpu_stats)
+from benchmark.metrics import gpu_stats
+from benchmark.mot_eval import (coco_map, run_trackeval, write_gt_subset,
+                                write_mot_file)
+from benchmark.timing import benchmark_pipeline
+
+METRICS_VERSION = 2  # 2 = TrackEval HOTA/CLEAR + COCO mAP (v1 = home-grown)
 
 
-def run_study(config_path, mode="full"):
+def run_study(config_path, mode="full", force_cpu=False):
     cfg = yaml.safe_load(open(config_path))
-    device = "cpu" if mode == "smoke" else cfg.get("device", "cpu")
-    print(f"[study] {cfg['experiment']} mode={mode} device={device}")
+    device = "cpu" if (mode == "smoke" or force_cpu) else cfg.get("device", "cpu")
+    print(f"[study] {cfg['experiment']} mode={mode} device={device}", flush=True)
 
-    # 1. build components from config
     dcfg, tcfg = cfg["detector"], cfg["tracker"]
     detector = Detector(dcfg["name"], imgsz=dcfg.get("imgsz", 640),
-                        conf=dcfg.get("conf", 0.25), device=device)
-    tracker = Tracker(tcfg["name"])
-    scfg = cfg.get("streaming", {})
-    cache = (FrameFeatureCache(scfg.get("keyframe_interval", 3))
-             if scfg.get("frame_cache") else None)
-    pipeline = StreamingPipeline(detector, tracker, cache=cache, out_path=None)
+                        conf=dcfg.get("conf", 0.25), device=device,
+                        classes=dcfg.get("classes"), iou=dcfg.get("iou"))
 
-    # 2. data
     data_cfg = cfg["data"]
     dataset = SportsMOT(split=data_cfg.get("split", "test"))
     seqs = dataset.sequences()
-    max_clips = 1 if mode == "smoke" else data_cfg.get("max_clips", len(seqs))
+    max_clips = 1 if mode == "smoke" else data_cfg.get("max_clips") or len(seqs)
+    seqs = seqs[:max_clips]
 
-    # 3. run
-    all_pred, all_gt, lat = {}, {}, []
-    for seq in seqs[:max_clips]:
+    work = Path("results/_work") / cfg["experiment"]
+    shutil.rmtree(work, ignore_errors=True)
+    gt_dir, trk_dir = work / "gt", work / "tracker"
+    trk_dir.mkdir(parents=True)
+
+    # ---- accuracy pass: every frame of every selected clip ----
+    all_pred, all_gt = {}, {}
+    for si, seq in enumerate(seqs):
         frames = dataset.frames(seq)
         if mode == "smoke":
             frames = frames[:30]
-        import cv2
+        tracker = Tracker(tcfg["name"])
+        by_frame = {}
         for f in frames:
             fid = int(f.stem)
             img = cv2.imread(str(f))
             dets = detector.infer(img)
-            tracks = tracker.update(dets, img)
-            all_pred.setdefault(fid, []).extend(dets)
-        gt = dataset.ground_truth(seq)
-        for fid, boxes in gt.items():
-            all_gt.setdefault(fid, []).extend(boxes)
-        tracker.reset()
-        print(f"  seq {seq}: {len(frames)} frames")
+            by_frame[fid] = tracker.update(dets, img)
+            all_pred[(si, fid)] = list(dets)
+        last = int(frames[-1].stem)
+        for fid, boxes in dataset.ground_truth(seq).items():
+            if fid <= last:
+                all_gt[(si, fid)] = boxes
+        write_mot_file(trk_dir / f"{seq}.txt", by_frame)
+        write_gt_subset(dataset.root / seq, gt_dir / seq, last)
+        print(f"  seq {seq}: {len(frames)} frames", flush=True)
 
-    # 4. metrics — re-run pipeline timing on one clip for clean latency numbers
-    import cv2
-    seq = seqs[0]
-    frames = dataset.frames(seq)[: (30 if mode == "smoke" else 200)]
-    t_pipe = StreamingPipeline(detector, Tracker(tcfg["name"]), cache=None,
-                               out_path=None, draw=False)
-    import numpy as np
-    for f in frames:
-        img = cv2.imread(str(f))
-        t0 = __import__("time").perf_counter()
-        d = detector.infer(img)
-        t_pipe.tracker.update(d, img)
-        t_pipe.latencies_ms.append((__import__("time").perf_counter() - t0) * 1000)
-    rep = t_pipe.latency_report()
+    trk_m = run_trackeval(gt_dir, trk_dir, seqs, work)
+    det_m = coco_map(all_pred, all_gt)
 
-    det_m = compute_detection_metrics(all_pred, all_gt)
-    # tracking metrics need per-frame track output; approximate from preds here
-    stats = gpu_stats()
+    # ---- speed pass on the first clip (pre-decoded, warmup, repeats) ----
+    first = dataset.frames(seqs[0])
+    n_t, warm, reps = (30, 5, 2) if mode == "smoke" else (500, 50, 5)
+    attempts = []
+    for _ in range(3 if mode == "full" else 1):  # retry a transiently contended pass
+        speed = benchmark_pipeline(detector, lambda: Tracker(tcfg["name"]), first,
+                                   device, n_frames=n_t, warmup=warm, repeats=reps)
+        attempts.append(speed)
+        if not speed["contended"]:
+            break
+    speed = min(attempts, key=lambda s: (s["contended"], s["latency_repeat_cv_pct"]))
+    speed["timing_attempts"] = len(attempts)
 
     result = {
-        "experiment": cfg["experiment"],
-        "config": cfg,
-        "mode": mode,
-        "device": device,
-        **rep,
-        **det_m,
-        **stats,
+        "experiment": cfg["experiment"], "config": cfg, "mode": mode,
+        "device": device, "metrics_version": METRICS_VERSION,
+        "n_clips": len(seqs), "n_frames_eval": len(all_pred),
+        "n_gt": sum(len(v) for v in all_gt.values()),
+        "n_pred": sum(len(v) for v in all_pred.values()),
+        **speed, **trk_m,
+        "map": det_m["map"], "map50": det_m["map50"], "map75": det_m["map75"],
+        **gpu_stats(),
     }
     out = Path(cfg["benchmark"]["save_to"])
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=1))
+    shutil.rmtree(work, ignore_errors=True)
     print(f"[study] wrote {out}")
-    print(json.dumps({k: result[k] for k in
-                      ("fps", "latency_p50_ms", "latency_p95_ms", "map")},
-                     indent=1))
+    keys = ("fps", "fps_e2e_with_decode", "latency_p50_ms", "latency_p95_ms",
+            "latency_repeat_cv_pct", "contended", "hota", "deta", "assa",
+            "idf1", "mota", "map", "map50")
+    print(json.dumps({k: result.get(k) for k in keys}, indent=1))
     return result
 
 
