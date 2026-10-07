@@ -9,6 +9,32 @@ Status: scaffold. Week 2 implements the head + feature taps.
 Pretrained weights: timm (TinyViT) / ml-cvnets (MobileViT) — CPU-downloadable.
 """
 
+from pathlib import Path
+
+DEFAULT_WEIGHTS_PATH = Path("weights/tinyvit_5m.safetensors")
+
+
+class TinyViTBackbone:
+    """TinyViT-5M feature extractor (Week 2).
+
+    Raises NotImplementedError until Week 2 wires timm weights + feature taps.
+    Tests decorated with @needs_weights skip gracefully when weights are absent.
+    """
+
+    def __init__(self, device="cpu"):
+        # TODO Week 2: load timm's tinyvit_5m_224 with local safetensors
+        raise NotImplementedError(
+            "TinyViT backbone not yet implemented. "
+            "Run scripts/download_weights.py first (Week 2)."
+        )
+
+    def feature_map_shapes(self, imgsz):
+        raise NotImplementedError("Week 2")
+
+    def backbone_features(self, frame):
+        """Return list of feature-map tensors for FrameFeatureCache."""
+        raise NotImplementedError("Week 2")
+
 
 class EfficientViTDetector:
     BACKBONES = ("mobilevit_s", "tinyvit_5m")
