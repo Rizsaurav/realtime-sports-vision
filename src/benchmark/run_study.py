@@ -23,9 +23,9 @@ from benchmark.metrics import (compute_detection_metrics,
                                compute_tracking_metrics, gpu_stats)
 
 
-def run_study(config_path, mode="full"):
+def run_study(config_path, mode="full", force_cpu=False):
     cfg = yaml.safe_load(open(config_path))
-    device = "cpu" if mode == "smoke" else cfg.get("device", "cpu")
+    device = "cpu" if (mode == "smoke" or force_cpu) else cfg.get("device", "cpu")
     print(f"[study] {cfg['experiment']} mode={mode} device={device}")
 
     # 1. build components from config
