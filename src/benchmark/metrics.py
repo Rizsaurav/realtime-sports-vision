@@ -68,6 +68,12 @@ def compute_tracking_metrics(tracks_out, ground_truth):
     """
     try:
         import motmetrics as mm
+        # motmetrics 1.4.0 predates NumPy 2.0 and calls np.asfarray, which
+        # was removed; alias it so the motmetrics path keeps working.
+        if not hasattr(np, "asfarray"):
+            def _asfarray(a, dtype=float):
+                return np.asarray(a, dtype=dtype)
+            np.asfarray = _asfarray
         acc = mm.MOTAccumulator(auto_id=True)
         for fid, tracks in tracks_out:
             gt = ground_truth.get(fid, [])

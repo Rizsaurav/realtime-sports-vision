@@ -25,6 +25,7 @@ onnxruntime
 
 # Metrics / eval
 motmetrics           # MOTA/MOTP for tracking eval
+pynvml               # VRAM + watt sampling on NVIDIA GPUs (optional; metrics degrade gracefully without it)
 
 # UI
 streamlit
