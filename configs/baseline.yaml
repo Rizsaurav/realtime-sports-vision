@@ -20,7 +20,7 @@ streaming:
 
 data:
   dataset: sportsmot      # or: soccernet-tracking
-  split: test
+  split: val              # val has gt.txt (test does not) -> real mAP/MOTA + speed in one run
   max_clips: 5            # smoke: 1 clip; Session A: full split
 
 benchmark:
