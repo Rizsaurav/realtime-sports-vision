@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gsr_jersey_eval import gate as jersey_gate
 from gsr_jersey_eval import predict as jersey_commits
 from gsr_team_eval import predict_teams_refit
 
@@ -113,7 +114,7 @@ def stitch_tracks(rows, max_gap=75, v_max=0.4, d0=2.0, feat_thr=3.0):
             if c in used:
                 t = rows[i]["track"]
                 canon[t] = t
-                c = t if t not in used else -(10 ** 6 + i)
+                c = t if t not in used else 5_000_000 + i     # scorer needs ids >= 0
                 out[i] = c
             used[c] = i
         for i in by_frame[f]:
@@ -129,7 +130,46 @@ def stitch_tracks(rows, max_gap=75, v_max=0.4, d0=2.0, feat_thr=3.0):
     return out
 
 
+def link_by_number(preds):
+    """Causal identity linking: once a track outputs (team, jersey), and an earlier
+    identity that is not visible in this frame already owned that (team, jersey),
+    the track takes over that identity id from then on."""
+    by_frame = {}
+    for p in preds:
+        by_frame.setdefault(p["image_id"], []).append(p)
+    owner, remap = {}, {}
+    for iid in sorted(by_frame):
+        ps = by_frame[iid]
+        active = {remap.get(p["track_id"], p["track_id"]) for p in ps}
+        for p in ps:
+            a = p["attributes"]
+            t = p["track_id"]
+            cur = remap.get(t, t)
+            if a["jersey"] is not None and a["team"] is not None and a["role"] in ("player", "goalkeeper"):
+                key = (a["team"], a["jersey"])
+                o = owner.get(key)
+                if o is None:
+                    owner[key] = cur
+                elif o != cur and o not in active:
+                    remap[t] = o
+                    active.discard(cur)
+                    active.add(o)
+                    cur = o
+            p["track_id"] = cur
+            p["_raw"] = t
+        used = {}
+        for p in sorted(ps, key=lambda p: p["_raw"] != p["track_id"]):
+            if p["track_id"] in used:                    # revived original owns the id
+                remap.pop(p["_raw"], None)
+                p["track_id"] = p["_raw"] if p["_raw"] not in used else 6_000_000 + len(used)
+            used[p["track_id"]] = 1
+    for p in preds:
+        p.pop("_raw", None)
+    return preds
+
+
 def assemble_seq(pr, jz, L, tau, ratio, role_window=0, stitch=None):
+    """jz: dict with seq/frame/track/ann_id, P (per-crop number dist) and Pnone."""
     rows = [dict(r) for r in pr["rows"] if r["cls"] != "ball"]
     if stitch is not None:
         cid = stitch_tracks(rows, **stitch)
@@ -150,7 +190,7 @@ def assemble_seq(pr, jz, L, tau, ratio, role_window=0, stitch=None):
             if stitch is not None:                         # jersey evidence follows the stitched id
                 remap = {r["orig_track"]: r["track"] for r in rows}
                 meta["track"] = np.asarray([remap.get(int(t), int(t)) for t in meta["track"]])
-            jc = jersey_commits(meta, jz["P"][m], 1.0 - jz["leg"][m], L, tau, ratio).get(pr["seq"], {})
+            jc = jersey_commits(meta, jz["P"][m], jz["Pnone"][m], L, tau, ratio).get(pr["seq"], {})
     preds = []
     for i, r in enumerate(rows):
         if r["pitch"] is None:
@@ -182,7 +222,9 @@ def run_eval(trackeval_dir, gt_root, trk_root, split, tracker, seqs, use_attrs=T
            "--METRICS", "HOTA", "--PRINT_CONFIG", "False", "--USE_PARALLEL", "False",
            "--USE_ROLES", str(use_attrs), "--USE_TEAMS", str(use_attrs),
            "--USE_JERSEY_NUMBERS", str(use_attrs), "--SEQ_INFO", *seqs]
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if r.returncode:
+        raise RuntimeError(f"scorer failed for {tracker}:\n{r.stderr[-2000:]}")
     summ = trk_root / f"SoccerNetGS-{split}" / tracker / "cls_comb_det_av_summary.txt"
     head, vals = summ.read_text().splitlines()[:2]
     return dict(zip(head.split(), map(float, vals.split())))
@@ -196,9 +238,14 @@ def main():
     ap.add_argument("--split", default="valid")
     ap.add_argument("--trackeval", required=True)
     ap.add_argument("--lookahead", type=int, nargs="+", default=[0, 25, 125, -1])
-    ap.add_argument("--tau", type=float, default=1.0)
-    ap.add_argument("--ratio", type=float, default=0.5)
+    ap.add_argument("--tau", type=float, default=4.0)
+    ap.add_argument("--ratio", type=float, default=0.6)
     ap.add_argument("--name", default="")
+    ap.add_argument("--read-conf", type=float, default=0.97,
+                    help="count a jersey read only if its top number prob is >= this")
+    ap.add_argument("--leg-thr", type=float, default=0.3)
+    ap.add_argument("--link-number", action="store_true",
+                    help="causal identity linking by (team, jersey)")
     ap.add_argument("--stitch", action="store_true", help="online pitch-space track stitching")
     ap.add_argument("--stitch-gap", type=int, default=75)
     ap.add_argument("--stitch-vmax", type=float, default=0.4, help="metres per frame")
@@ -214,6 +261,8 @@ def main():
     seqs = sorted(p.stem for p in pdir.glob("SNGS-*.json"))
     prs = {s: json.loads((pdir / f"{s}.json").read_text()) for s in seqs}
     jz = dict(np.load(args.jersey)) if args.jersey else None
+    if jz is not None:
+        jz["P"], jz["Pnone"] = jersey_gate(jz["P"], 1.0 - jz["leg"], args.read_conf, args.leg_thr)
     trk_root = Path("results/_work/gsr_e2e").resolve() / name
     shutil.rmtree(trk_root, ignore_errors=True)
     tags = []
@@ -222,11 +271,13 @@ def main():
         out = trk_root / f"SoccerNetGS-{args.split}" / tag / "data"
         out.mkdir(parents=True)
         for s in seqs:
-            (out / f"{s}.json").write_text(json.dumps(
-                {"predictions": assemble_seq(
+            preds = assemble_seq(
                     prs[s], jz, L, args.tau, args.ratio, args.role_window,
                     dict(max_gap=args.stitch_gap, v_max=args.stitch_vmax, d0=args.stitch_d0,
-                         feat_thr=args.stitch_feat) if args.stitch else None)}))
+                         feat_thr=args.stitch_feat) if args.stitch else None)
+            if args.link_number:
+                preds = link_by_number(preds)
+            (out / f"{s}.json").write_text(json.dumps({"predictions": preds}))
         tags.append(tag)
     noattr = f"{tags[0]}__noattr"
     (trk_root / f"SoccerNetGS-{args.split}" / noattr).mkdir()

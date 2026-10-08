@@ -36,6 +36,16 @@ def number_probs(p1, p2):
     return n, p1[:, 10] * p2[:, 10]
 
 
+def gate(P, Pnone, read_conf=0.0, leg_thr=0.0, power=1.0):
+    """Evidence shaping: drop crops below a legibility / read-confidence floor and
+    sharpen the per-crop number distribution (power > 1 favours confident reads)."""
+    w = 1.0 - Pnone
+    keep = (w >= leg_thr) & (P.max(1) >= read_conf)
+    Q = np.where(keep[:, None], P ** power, 0.0)
+    Q = Q / np.maximum(Q.sum(1, keepdims=True), 1e-9) * keep[:, None]
+    return Q, np.where(keep, Pnone, 1.0)
+
+
 def predict(meta, P, Pnone, L, tau, ratio):
     """-> {seq: {track_id: (commit_frame, number)}}: the frame from which the
     online system outputs the number for that track (null before it)."""
@@ -92,12 +102,16 @@ def main():
     ap.add_argument("--probs", default="",
                     help="precomputed per-crop scores (score_jersey_parseq.py): P[N,100], leg[N]")
     ap.add_argument("--name", default="r18")
+    ap.add_argument("--read-conf", type=float, default=0.0)
+    ap.add_argument("--leg-thr", type=float, default=0.0)
+    ap.add_argument("--power", type=float, default=1.0)
     args = ap.parse_args()
 
     if args.probs:
         z = np.load(args.probs)
         meta = {k: z[k] for k in ("seq", "frame", "track", "ann_id")}
         P, Pnone = z["P"], 1.0 - z["leg"]
+        P, Pnone = gate(P, Pnone, args.read_conf, args.leg_thr, args.power)
         print(f"[jersey] loaded {len(P)} scored crops", flush=True)
     else:
         P, Pnone, meta = score_with_classifier(args)
@@ -123,15 +137,17 @@ def score_with_classifier(args):
 
 def run_curve(args, P, Pnone, meta):
     gt_root = Path(args.gt).resolve()
+    scored = set(np.unique(meta["seq"]).tolist())
     seq_dirs = sorted(p for p in (gt_root / args.split).iterdir()
-                      if (p / "Labels-GameState.json").exists())
+                      if (p / "Labels-GameState.json").exists() and p.name in scored)
     seqs = [p.name for p in seq_dirs]
     gts = {p.name: json.loads((p / "Labels-GameState.json").read_text()) for p in seq_dirs}
-    trk_root = Path("results/_work/gsr_jersey").resolve()
+    import os
+    trk_root = Path(f"results/_work/gsr_jersey/{args.name}_{os.getpid()}").resolve()
     shutil.rmtree(trk_root, ignore_errors=True)
     tags, stats = [], {}
     for L in args.lookahead:
-        tag = f"jersey_{args.name}_L{'inf' if L < 0 else L}_tau{args.tau}_r{args.ratio}"
+        tag = f"jersey_{args.name}_rc{args.read_conf}_lg{args.leg_thr}_pw{args.power}_L{'inf' if L < 0 else L}_tau{args.tau}_r{args.ratio}"
         pred = predict(meta, P, Pnone, L, args.tau, args.ratio)
         out = trk_root / f"SoccerNetGS-{args.split}" / tag / "data"
         out.mkdir(parents=True)
