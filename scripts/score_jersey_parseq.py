@@ -45,7 +45,7 @@ def load_models(repo, device):
     return leg, stm
 
 
-def crops_for_frame(frame, boxes):
+def crops_for_frame(frame, boxes, top=0.10, bot=0.55, pad_x=0.0):
     """-> list of (whole_player_rgb, torso_rgb) per box (full resolution)."""
     H, W = frame.shape[:2]
     out = []
@@ -53,8 +53,9 @@ def crops_for_frame(frame, boxes):
         x, y, w, h = b["x"], b["y"], b["w"], b["h"]
         x1, x2 = int(max(0, x)), int(min(W, x + w))
         y1, y2 = int(max(0, y)), int(min(H, y + h))
-        ty1, ty2 = int(max(0, y + 0.10 * h)), int(min(H, y + 0.55 * h))
-        whole, torso = frame[y1:y2, x1:x2], frame[ty1:ty2, x1:x2]
+        ty1, ty2 = int(max(0, y + top * h)), int(min(H, y + bot * h))
+        tx1, tx2 = int(max(0, x - pad_x * w)), int(min(W, x + (1 + pad_x) * w))
+        whole, torso = frame[y1:y2, x1:x2], frame[ty1:ty2, tx1:tx2]
         if whole.size == 0 or torso.size == 0:
             out.append(None)
             continue
@@ -89,6 +90,11 @@ def main():
     ap.add_argument("--leg-thr", type=float, default=0.3, help="run PARSeq only above this")
     ap.add_argument("--max-seqs", type=int, default=0)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--torso-top", type=float, default=0.10)
+    ap.add_argument("--torso-bot", type=float, default=0.55)
+    ap.add_argument("--pad-x", type=float, default=0.0)
+    ap.add_argument("--whole", action="store_true", help="read the number from the whole box")
+    ap.add_argument("--seqs", nargs="+", default=None)
     ap.add_argument("--perception", default="",
                     help="score boxes from a gsr_perceive.py output dir instead of ground truth")
     args = ap.parse_args()
@@ -97,6 +103,8 @@ def main():
     img_hw = tuple(stm.hparams.img_size)
     seqs = sorted(p for p in (Path(args.gt) / args.split).iterdir()
                   if (p / "Labels-GameState.json").exists())[: args.max_seqs or None]
+    if args.seqs:
+        seqs = [p for p in seqs if p.name in args.seqs]
     rows = {k: [] for k in ("seq", "frame", "track", "ann_id", "leg")}
     Ps = []
     pool = ThreadPoolExecutor(16)
@@ -121,12 +129,14 @@ def main():
         meta, whole, torso = [], [], []
         for (fi, im), fr in zip(ims, frames):
             anns = by_img[im["image_id"]]
-            for a, c in zip(anns, crops_for_frame(fr, [a["bbox_image"] for a in anns])):
+            crops = crops_for_frame(fr, [a["bbox_image"] for a in anns], args.torso_top,
+                                    args.torso_bot, args.pad_x)
+            for a, c in zip(anns, crops):
                 if c is None:
                     continue
                 meta.append((s.name, fi, a["track_id"], a["id"]))
                 whole.append(c[0])
-                torso.append(c[1])
+                torso.append(c[0] if args.whole else c[1])
         legs, P = np.zeros(len(meta), np.float32), np.zeros((len(meta), 100), np.float32)
         with torch.no_grad():
             for i in range(0, len(meta), 512):
