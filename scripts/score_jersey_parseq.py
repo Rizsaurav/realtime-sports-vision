@@ -45,16 +45,34 @@ def load_models(repo, device):
     return leg, stm
 
 
-def crops_for_frame(frame, boxes, top=0.10, bot=0.55, pad_x=0.0):
-    """-> list of (whole_player_rgb, torso_rgb) per box (full resolution)."""
+def pose_torso(kp, pad=5, min_conf=0.3):
+    """Shoulders-to-hips box from COCO keypoints (5,6 shoulders; 11,12 hips), or None."""
+    pts = kp[[5, 6, 11, 12]]
+    if (pts[:, 2] >= min_conf).sum() < 3 or pts[[0, 1], 2].max() < min_conf:
+        return None
+    v = pts[pts[:, 2] >= min_conf]
+    x1, y1 = v[:, 0].min() - pad, v[:, 1].min() - pad
+    x2, y2 = v[:, 0].max() + pad, v[:, 1].max() + pad
+    if x2 - x1 < 6 or y2 - y1 < 6:
+        return None
+    return x1, y1, x2, y2
+
+
+def crops_for_frame(frame, boxes, top=0.10, bot=0.55, pad_x=0.0, kps=None):
+    """-> list of (whole_player_rgb, torso_rgb) per box (full resolution).
+    kps: optional list (per box) of (17,3) keypoints for pose-guided torso crops."""
     H, W = frame.shape[:2]
     out = []
-    for b in boxes:
+    for bi, b in enumerate(boxes):
         x, y, w, h = b["x"], b["y"], b["w"], b["h"]
         x1, x2 = int(max(0, x)), int(min(W, x + w))
         y1, y2 = int(max(0, y)), int(min(H, y + h))
         ty1, ty2 = int(max(0, y + top * h)), int(min(H, y + bot * h))
         tx1, tx2 = int(max(0, x - pad_x * w)), int(min(W, x + (1 + pad_x) * w))
+        pt = pose_torso(kps[bi]) if kps is not None and kps[bi] is not None else None
+        if pt is not None:
+            tx1, ty1 = int(max(0, pt[0])), int(max(0, pt[1]))
+            tx2, ty2 = int(min(W, pt[2])), int(min(H, pt[3]))
         whole, torso = frame[y1:y2, x1:x2], frame[ty1:ty2, tx1:tx2]
         if whole.size == 0 or torso.size == 0:
             out.append(None)
@@ -95,11 +113,16 @@ def main():
     ap.add_argument("--pad-x", type=float, default=0.0)
     ap.add_argument("--whole", action="store_true", help="read the number from the whole box")
     ap.add_argument("--seqs", nargs="+", default=None)
+    ap.add_argument("--pose", default="", help="npz from pose_keypoints.py for pose-guided crops")
     ap.add_argument("--perception", default="",
                     help="score boxes from a gsr_perceive.py output dir instead of ground truth")
     args = ap.parse_args()
 
     leg_model, stm = load_models(args.repo, args.device)
+    pose = {}
+    if args.pose:
+        pz = np.load(args.pose)
+        pose = dict(zip(pz["ann_id"].tolist(), pz["kps"]))
     img_hw = tuple(stm.hparams.img_size)
     seqs = sorted(p for p in (Path(args.gt) / args.split).iterdir()
                   if (p / "Labels-GameState.json").exists())[: args.max_seqs or None]
@@ -117,7 +140,7 @@ def main():
                 x, y, w, h = r["bbox"]
                 if r["cls"] in ("player", "goalkeeper") and h >= args.min_h:
                     by_img.setdefault(r["image_id"], []).append(
-                        {"id": i, "track_id": r["track"],
+                        {"id": i, "pose_key": f"{s.name}:{i}", "track_id": r["track"],
                          "bbox_image": {"x": x, "y": y, "w": w, "h": h}})
         else:
             for a in d["annotations"]:
@@ -130,7 +153,9 @@ def main():
         for (fi, im), fr in zip(ims, frames):
             anns = by_img[im["image_id"]]
             crops = crops_for_frame(fr, [a["bbox_image"] for a in anns], args.torso_top,
-                                    args.torso_bot, args.pad_x)
+                                    args.torso_bot, args.pad_x,
+                                    [pose.get(a.get("pose_key", a["id"])) for a in anns]
+                                    if pose else None)
             for a, c in zip(anns, crops):
                 if c is None:
                     continue
