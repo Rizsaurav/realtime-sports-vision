@@ -34,8 +34,11 @@ from gsr_team_eval import predict_teams_refit
 CAT = {"player": 1, "goalkeeper": 2, "referee": 3}
 
 
-def roles_online(rows, L):
-    """-> {row_index: role} using the track's majority class up to t+L."""
+def roles_online(rows, L, window=0):
+    """-> {row_index: role}: majority detector class of the track over frames
+    (t - window, t + L]; window=0 = the whole track history (up to t + L).
+    A finite window stops an identity hand-over (e.g. referee -> player)
+    from dragging the old role along."""
     by_track = {}
     for i, r in enumerate(rows):
         by_track.setdefault(r["track"], []).append(i)
@@ -43,20 +46,25 @@ def roles_online(rows, L):
     for tr, idx in by_track.items():
         idx.sort(key=lambda i: rows[i]["frame"])
         frames = [rows[i]["frame"] for i in idx]
-        cnt, ptr = Counter(), 0
+        cnt, ptr, lo = Counter(), 0, 0
         for j, i in enumerate(idx):
             horizon = frames[-1] if L < 0 else frames[j] + L
             while ptr < len(idx) and frames[ptr] <= horizon:
                 cnt[rows[idx[ptr]]["cls"]] += 1
                 ptr += 1
-            out[i] = cnt.most_common(1)[0][0]
+            if window:
+                while lo < ptr and frames[lo] <= frames[j] - window:
+                    cnt[rows[idx[lo]]["cls"]] -= 1
+                    lo += 1
+            out[i] = (cnt.most_common(1)[0][0] if sum(cnt.values()) > 0
+                      else rows[i]["cls"])
     return out
 
 
-def assemble_seq(pr, jz, L, tau, ratio):
+def assemble_seq(pr, jz, L, tau, ratio, role_window=0):
     rows = [r for r in pr["rows"] if r["cls"] != "ball"]
-    role = roles_online(rows, L)
-    team_rows = [(i, r["frame"], r["track"], role[i], r["pitch"][3] if r["pitch"] else 0.0,
+    role = roles_online(rows, L, role_window)
+    team_rows = [(i, r["frame"], r["track"], role[i], r["pitch"][2] if r["pitch"] else 0.0,
                   np.asarray(r["feat"]))
                  for i, r in enumerate(rows)
                  if role[i] in ("player", "goalkeeper") and r["feat"] is not None]
@@ -115,6 +123,8 @@ def main():
     ap.add_argument("--tau", type=float, default=1.0)
     ap.add_argument("--ratio", type=float, default=0.5)
     ap.add_argument("--name", default="")
+    ap.add_argument("--role-window", type=int, default=0,
+                    help="frames of history for the role vote (0 = whole track)")
     args = ap.parse_args()
 
     pdir = Path(args.perception)
@@ -132,7 +142,8 @@ def main():
         out.mkdir(parents=True)
         for s in seqs:
             (out / f"{s}.json").write_text(json.dumps(
-                {"predictions": assemble_seq(prs[s], jz, L, args.tau, args.ratio)}))
+                {"predictions": assemble_seq(prs[s], jz, L, args.tau, args.ratio,
+                                             args.role_window)}))
         tags.append(tag)
     noattr = f"{tags[0]}__noattr"
     (trk_root / f"SoccerNetGS-{args.split}" / noattr).mkdir()
