@@ -159,7 +159,7 @@ def main():
 
     det_dir = Path(args.dets)
     meta = json.loads((det_dir / "meta.json").read_text())
-    gt_root = Path("data/raw/sportsmot") / meta["split"]
+    gt_root = Path(meta.get("root", "data/raw/sportsmot")) / meta["split"]
     seqs = sorted(p.stem for p in det_dir.glob("*.npz"))
     names = [n for n in CONFIGS if not args.only or n in args.only.split(",")]
     jobs = [(n, s, str(det_dir / f"{s}.npz"), str(gt_root / s / "img1"),

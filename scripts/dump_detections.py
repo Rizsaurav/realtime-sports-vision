@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--conf", type=float, default=0.05)
     ap.add_argument("--out", required=True)
     ap.add_argument("--split", default=None)
+    ap.add_argument("--root", default="data/raw/sportsmot", help="MOT-layout dataset root")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--max-seqs", type=int, default=0)
     ap.add_argument("--max-frames", type=int, default=0)
@@ -44,7 +45,7 @@ def main():
                    device=args.device, classes=d.get("classes"), iou=d.get("iou"),
                    weights=d.get("weights"))
     split = args.split or cfg["data"].get("split", "val")
-    ds = SportsMOT(split=split)
+    ds = SportsMOT(root=args.root, split=split)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -62,7 +63,7 @@ def main():
                             det=np.asarray(rows, np.float32).reshape(-1, 5))
         print(f"  {seq}: {len(rows)} dets", flush=True)
     (out / "meta.json").write_text(json.dumps({
-        "config": args.config, "experiment": cfg["experiment"], "split": split,
+        "config": args.config, "experiment": cfg["experiment"], "split": split, "root": args.root,
         "conf_floor": args.conf, "frames": n, "seconds": round(time.time() - t0, 1),
         "detector": d}, indent=1))
     print(f"[dump] {n} frames -> {out}")

@@ -32,6 +32,17 @@ from gsr_team_eval import torso_feature
 NAMES = {0: "player", 1: "goalkeeper", 2: "referee", 3: "ball"}
 
 
+class SharedCMC:
+    """Stand-in for the tracker's CMC: returns the motion estimated by the propagator."""
+    H = np.eye(2, 3, dtype=np.float32)
+
+    def estimate(self, frame, dets_xyxy=None):
+        return self.H
+
+    def reset(self):
+        self.H = np.eye(2, 3, dtype=np.float32)
+
+
 def project(H, pts):
     p = cv2.perspectiveTransform(np.asarray(pts, np.float32).reshape(-1, 1, 2), H)
     return p.reshape(-1, 2)
@@ -49,6 +60,9 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--shard", default="0/1")
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--tracker", default="bytetrack", choices=["bytetrack", "mcbyte", "botsort"])
+    ap.add_argument("--cmc", default="none", choices=["none", "builtin", "shared"],
+                    help="shared = reuse the calibration propagator's optical flow as tracker CMC")
     args = ap.parse_args()
 
     import supervision as sv
@@ -66,8 +80,16 @@ def main():
             continue
         d = json.loads((s / "Labels-GameState.json").read_text())
         cache = np.load(Path(args.calib_cache) / f"{s.name}.npz")["H"]
-        trk = trackers.ByteTrackTracker(frame_rate=25)
+        if args.tracker == "bytetrack":
+            trk = trackers.ByteTrackTracker(frame_rate=25)
+        else:
+            cls_ = trackers.McByteTracker if args.tracker == "mcbyte" else trackers.BoTSORTTracker
+            trk = cls_(frame_rate=25, enable_cmc=args.cmc != "none")
+        shared = SharedCMC()
+        if args.cmc == "shared":
+            trk.cmc = shared
         prop = HomographyPropagator()
+        prev_boxes = None
         last_key, H_last = None, None
         rows, ball, t_det, t_trk, t_cal = [], [], [], [], []
         for fi, im in enumerate(d["images"]):
@@ -85,12 +107,18 @@ def main():
             dets = sv.Detections(xyxy=xyxy[people].astype(np.float32),
                                  confidence=conf[people].astype(np.float32),
                                  class_id=cls[people])
+            tm = time.perf_counter()
+            M = prop.motion(frame, prev_boxes)               # one flow estimate per frame
+            shared.H = HomographyPropagator.cmc_affine(M)
+            t_mot = (time.perf_counter() - tm) * 1000
+            t1 = time.perf_counter()
             tracked = trk.update(dets, frame)
             t2 = time.perf_counter()
             boxes = tracked.xyxy
+            prev_boxes = boxes
             # calibration: keyframe from the accurate calibrator, else propagate
             due = last_key is None or fi - last_key >= args.keyframe_k
-            H = None if due else prop.step(frame, boxes)
+            H = None if due else prop.advance(M)
             if H is None and not np.isnan(cache[fi]).any():
                 H = cache[fi]
                 prop.keyframe(frame, H, boxes)
@@ -99,7 +127,8 @@ def main():
                 H = H_last
             H_last = H
             t3 = time.perf_counter()
-            t_det.append((t1 - t0) * 1000); t_trk.append((t2 - t1) * 1000); t_cal.append((t3 - t2) * 1000)
+            t_det.append((tm - t0) * 1000); t_trk.append((t2 - t1) * 1000)
+            t_cal.append((t3 - t2) * 1000 + t_mot)
             if tracked.tracker_id is None or len(tracked) == 0:
                 continue
             for b, tid, c, sc in zip(tracked.xyxy, tracked.tracker_id, tracked.class_id,
