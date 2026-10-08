@@ -1,0 +1,16 @@
+# SoccerNet-GSR detector: 4 classes (player, goalkeeper, referee, ball)
+experiment: gsr_yolo26s_1280
+device: cuda
+detector:
+  name: yolo26s
+  weights: runs/finetune/yolo26s_gsr_1280/weights/best.pt
+  imgsz: 1280
+  conf: 0.25
+  classes: [0, 1, 2]        # people only for tracking (ball handled separately)
+tracker:
+  name: bytetrack
+data:
+  dataset: soccernet-gsr
+  split: valid
+benchmark:
+  save_to: results/gsr_yolo26s_1280.json
