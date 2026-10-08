@@ -26,6 +26,7 @@ class HomographyPropagator:
         self.mask_top_frac = mask_top_frac
         self.prev, self.prev_mask, self.H = None, None, None
         self.last_inliers = 0
+        self.last_affine = None          # previous->current similarity (full-res), for CMC
 
     def _grey(self, frame):
         h, w = frame.shape[:2]
@@ -47,12 +48,19 @@ class HomographyPropagator:
         Always advances the reference frame to `frame`."""
         g, s = self._grey(frame)
         M = None
+        self.last_affine = None
         if self.prev is not None:
             p0 = cv2.goodFeaturesToTrack(self.prev, mask=self.prev_mask, **self.feat)
             if p0 is not None and len(p0) >= self.min_inliers:
                 p1, st, _ = cv2.calcOpticalFlowPyrLK(self.prev, g, p0, None, **self.lk)
                 ok = st.reshape(-1) == 1
                 if ok.sum() >= self.min_inliers:
+                    A, ainl = cv2.estimateAffinePartial2D(p0[ok], p1[ok], method=cv2.RANSAC,
+                                                          ransacReprojThreshold=self.ransac_px)
+                    if A is not None:
+                        A = A.copy()
+                        A[:, 2] /= s                       # translation back to full-res pixels
+                        self.last_affine = A.astype(np.float32)
                     Ms, inl = cv2.findHomography(p1[ok], p0[ok], cv2.RANSAC, self.ransac_px)
                     self.last_inliers = int(inl.sum()) if inl is not None else 0
                     if Ms is not None and self.last_inliers >= self.min_inliers:
@@ -61,13 +69,12 @@ class HomographyPropagator:
         self.prev, self.prev_mask = g, self._mask(g, boxes, s)
         return M
 
-    @staticmethod
-    def cmc_affine(M):
-        """Tracker CMC transform (previous->current, 2x3) from motion() output."""
-        if M is None:
-            return np.eye(2, 3, dtype=np.float32)
-        A = np.linalg.inv(M)
-        return (A[:2] / A[2, 2]).astype(np.float32)
+    def cmc_affine(self, M=None):
+        """Tracker CMC transform (previous->current, 2x3): the similarity fitted on the
+        same flow points as the last motion() call (identity if it failed)."""
+        if self.last_affine is not None:
+            return self.last_affine
+        return np.eye(2, 3, dtype=np.float32)
 
     def keyframe(self, frame, H_img2pitch, boxes=None):
         """Reset the calibration chain with an accurate homography for this frame."""

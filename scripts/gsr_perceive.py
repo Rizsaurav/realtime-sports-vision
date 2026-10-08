@@ -109,7 +109,7 @@ def main():
                                  class_id=cls[people])
             tm = time.perf_counter()
             M = prop.motion(frame, prev_boxes)               # one flow estimate per frame
-            shared.H = HomographyPropagator.cmc_affine(M)
+            shared.H = prop.cmc_affine(M)
             t_mot = (time.perf_counter() - tm) * 1000
             t1 = time.perf_counter()
             tracked = trk.update(dets, frame)

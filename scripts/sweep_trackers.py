@@ -27,6 +27,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from benchmark.mot_eval import run_trackeval
+from calibration.propagation import HomographyPropagator
 
 FR = 25  # SportsMOT frame rate
 
@@ -72,7 +73,25 @@ CONFIGS = {
                                         minimum_iou_threshold_first_assoc=0.1,
                                         minimum_iou_threshold_second_assoc=0.5,
                                         minimum_iou_threshold_unconfirmed_assoc=0.3), True),
+    # camera motion from the calibration propagator's optical flow instead of the
+    # tracker's own estimator ("inv" flips the direction, to check the convention)
+    "rf_mcbyte_sharedcmc": ("rf", "McByteTracker", 0.1,
+                            dict(frame_rate=FR, enable_cmc=True), "shared"),
+    "rf_mcbyte_sharedcmc_inv": ("rf", "McByteTracker", 0.1,
+                                dict(frame_rate=FR, enable_cmc=True), "shared_inv"),
+    "rf_mcbyte_sharedcmc_w960": ("rf", "McByteTracker", 0.1,
+                                 dict(frame_rate=FR, enable_cmc=True), "shared_w960"),
 }
+
+
+class _FixedCMC:
+    H = np.eye(2, 3, dtype=np.float32)
+
+    def estimate(self, frame, dets_xyxy=None):
+        return self.H
+
+    def reset(self):
+        self.H = np.eye(2, 3, dtype=np.float32)
 
 
 def interpolate(txt, max_gap):
@@ -115,6 +134,11 @@ def run_seq(job):
     fids, dets = fids[keep], dets[keep]
     frames = sorted(int(p.stem) for p in Path(img_dir).glob("*.jpg"))
     trk = make_tracker(lib, cls, kw)
+    shared = needs_frames in ("shared", "shared_inv", "shared_w960")
+    if shared:
+        prop = HomographyPropagator(width=960 if needs_frames == "shared_w960" else 640)
+        fixed, prev_boxes = _FixedCMC(), None
+        trk.cmc = fixed
     blank = np.zeros((wh[1], wh[0], 3), np.uint8)
     lines, t_track = [], 0.0
     if lib == "rf":
@@ -123,6 +147,13 @@ def run_seq(job):
         d = dets[fids == fid]
         img = cv2.imread(str(Path(img_dir) / f"{fid:06d}.jpg")) if needs_frames else blank
         t = time.perf_counter()
+        if shared:
+            M = prop.motion(img, prev_boxes)
+            if needs_frames == "shared_inv":
+                fixed.H = (np.eye(2, 3, dtype=np.float32) if M is None
+                           else (M[:2] / M[2, 2]).astype(np.float32))
+            else:
+                fixed.H = prop.cmc_affine(M)
         if lib == "boxmot":
             arr = np.concatenate([d, np.zeros((len(d), 1), np.float32)], 1) if len(d) \
                 else np.empty((0, 6), np.float32)
@@ -136,6 +167,8 @@ def run_seq(job):
             ids = out.tracker_id if out.tracker_id is not None else []
             res = [(b[0], b[1], b[2], b[3], int(i))
                    for b, i in zip(out.xyxy, ids) if i is not None and i >= 0]
+            if shared:
+                prev_boxes = out.xyxy
         t_track += time.perf_counter() - t
         for x1, y1, x2, y2, tid in res:
             lines.append(f"{fid},{tid},{x1:.2f},{y1:.2f},{x2 - x1:.2f},{y2 - y1:.2f},1,-1,-1,-1")
