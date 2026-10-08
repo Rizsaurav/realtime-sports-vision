@@ -158,6 +158,7 @@ def main():
     ap.add_argument("--prop-width", type=int, default=640)
     ap.add_argument("--mask-players", action="store_true",
                     help="exclude GT person boxes from flow features (upper bound on masking)")
+    ap.add_argument("--seqs", nargs="+", default=None, help="only these sequences")
     ap.add_argument("--shard", default="0/1", help="i/n: process every n-th sequence (cache only)")
     ap.add_argument("--flip-y", action="store_true",
                     help="negate pitch y (if a calibrator's touchline convention is mirrored)")
@@ -174,6 +175,8 @@ def main():
     gt_root = Path(args.gt).resolve()
     seqs = sorted(p.name for p in (gt_root / args.split).iterdir()
                   if (p / "Labels-GameState.json").exists())[: args.max_seqs or None]
+    if args.seqs:
+        seqs = [x for x in seqs if x in args.seqs]
     si, sn = map(int, args.shard.split("/"))
     seqs = seqs[si::sn]
     k = args.keyframe_k
@@ -230,7 +233,11 @@ def main():
             else:
                 frame = cv2.imread(str(img_dir / im["file_name"]))
                 t = time.perf_counter()
-                H = calib.homography(frame)
+                try:
+                    H = calib.homography(frame)
+                except Exception as e:                     # solver blew up on this frame
+                    print(f"  [warn] {s} frame {fi}: {type(e).__name__}: {e}", flush=True)
+                    H = None
                 ms.append((time.perf_counter() - t) * 1000)
             Hs.append(np.full((3, 3), np.nan) if H is None else H)
             mss.append(ms[-1] if ms else 0.0)
