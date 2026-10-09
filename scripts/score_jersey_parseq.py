@@ -30,7 +30,7 @@ MEAN = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
 STD = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
 
 
-def load_models(repo, device):
+def load_models(repo, device, parseq_ckpt=None):
     sys.path.insert(0, repo)
     sys.path.insert(0, f"{repo}/str/parseq")
     from networks import LegibilityClassifier34
@@ -40,7 +40,7 @@ def load_models(repo, device):
                     map_location=device)
     leg.load_state_dict(sd)
     leg.to(device).eval()
-    ckpt = next(Path(repo, "models").glob("parseq_*.ckpt"))
+    ckpt = parseq_ckpt or next(Path(repo, "models").glob("parseq_*.ckpt"))
     stm = load_from_checkpoint(str(ckpt)).eval().to(device)
     return leg, stm
 
@@ -114,11 +114,12 @@ def main():
     ap.add_argument("--whole", action="store_true", help="read the number from the whole box")
     ap.add_argument("--seqs", nargs="+", default=None)
     ap.add_argument("--pose", default="", help="npz from pose_keypoints.py for pose-guided crops")
+    ap.add_argument("--parseq-ckpt", default=None, help="fine-tuned reader checkpoint")
     ap.add_argument("--perception", default="",
                     help="score boxes from a gsr_perceive.py output dir instead of ground truth")
     args = ap.parse_args()
 
-    leg_model, stm = load_models(args.repo, args.device)
+    leg_model, stm = load_models(args.repo, args.device, args.parseq_ckpt)
     pose = {}
     if args.pose:
         pz = np.load(args.pose)
