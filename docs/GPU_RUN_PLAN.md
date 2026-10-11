@@ -1,3 +1,5 @@
+> **Superseded (October 2026).** This is the original efficient-ViT / frame-caching plan. The project moved to live game state reconstruction; see [REPORT.md](REPORT.md).
+
 # GPU RUN PLAN — the money doc
 
 **Principle: the GPU is a measurement instrument, not a dev machine.**

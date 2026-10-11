@@ -1,3 +1,5 @@
+> **Superseded (October 2026).** This is the original efficient-ViT / frame-caching plan. The project moved to live game state reconstruction; see [REPORT.md](REPORT.md).
+
 # TRADEOFF STUDY — what we actually get to study
 
 This is the scientific core of the project. Each arm below is one row in the

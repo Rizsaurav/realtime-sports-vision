@@ -1,0 +1,355 @@
+{
+ "e2e_valid_ablation": [
+  {
+   "name": "ByteTrack, colour team, raw PARSeq jersey",
+   "variant": "e2e_rw25",
+   "gs_hota": [
+    26.37,
+    28.13,
+    30.29,
+    31.07,
+    32.19
+   ],
+   "pitch_hota": 63.4
+  },
+  {
+   "name": "+ McByte with shared camera-motion compensation",
+   "variant": "e2e_mcbyte_shcmc2",
+   "gs_hota": [
+    26.46,
+    28.33,
+    30.53,
+    31.2,
+    31.96
+   ],
+   "pitch_hota": 64.1
+  },
+  {
+   "name": "+ jersey evidence gating",
+   "variant": "e2e_v3_gated",
+   "gs_hota": [
+    27.81,
+    29.75,
+    32.44,
+    34.0,
+    35.23
+   ],
+   "pitch_hota": 64.1
+  },
+  {
+   "name": "+ pitch-space stitching",
+   "variant": "e2e_v3_gated_stitch",
+   "gs_hota": [
+    28.68,
+    30.54,
+    33.05,
+    34.65,
+    36.17
+   ],
+   "pitch_hota": 66.18
+  },
+  {
+   "name": "+ (team, jersey) identity linking",
+   "variant": "e2e_v4_link",
+   "gs_hota": [
+    28.68,
+    30.52,
+    33.14,
+    34.69,
+    36.37
+   ],
+   "pitch_hota": 65.84
+  },
+  {
+   "name": "+ pose-guided jersey crops (final)",
+   "variant": "e2e_v5_pose",
+   "gs_hota": [
+    29.54,
+    31.57,
+    34.33,
+    35.92,
+    37.88
+   ],
+   "pitch_hota": 66.0
+  },
+  {
+   "name": "final, fine-tuned jersey reader (gate 0.9)",
+   "variant": "e2e_v7_ft_rc09",
+   "gs_hota": [
+    30.14,
+    32.1,
+    34.85,
+    36.74,
+    38.47
+   ],
+   "pitch_hota": 65.95
+  }
+ ],
+ "e2e_test_final": [
+  34.57,
+  37.09,
+  39.89,
+  42.13,
+  43.62
+ ],
+ "pitch_hota_test_final": 66.07,
+ "e2e_test_ft": [
+  34.67,
+  37.18,
+  39.61,
+  41.59,
+  43.03
+ ],
+ "delays": [
+  "0",
+  "1 s",
+  "5 s",
+  "10 s",
+  "offline"
+ ],
+ "jersey_only_valid": {
+  "raw PARSeq, tau 4": [
+   55.74,
+   57.42,
+   61.76,
+   63.88,
+   66.28
+  ],
+  "gated (read conf >= 0.97)": [
+   58.41,
+   null,
+   65.65,
+   null,
+   74.05
+  ],
+  "gated + pose crops": [
+   60.1,
+   null,
+   67.98,
+   null,
+   77.41
+  ],
+  "gated + pose, fine-tuned reader": [
+   59.63,
+   null,
+   67.01,
+   null,
+   76.53
+  ]
+ },
+ "team_only_valid": {
+  "fit on first 1 s": [
+   81.38,
+   86.5,
+   87.94,
+   89.23,
+   95.5
+  ],
+  "online re-fit": [
+   83.24,
+   88.7,
+   90.41,
+   92.19,
+   92.3
+  ]
+ },
+ "calibration_valid": {
+  "every frame": {
+   "gs_hota_calib_only": 82.52,
+   "err_m_median": 0.534,
+   "pct_within_1m": 75.2,
+   "keyframe_pct": 100.0,
+   "prop_ms_p50": null
+  },
+  "keyframe every 5": {
+   "gs_hota_calib_only": 82.21,
+   "err_m_median": 0.547,
+   "pct_within_1m": 74.8,
+   "keyframe_pct": 19.49,
+   "prop_ms_p50": 4.47
+  },
+  "keyframe every 10": {
+   "gs_hota_calib_only": 81.98,
+   "err_m_median": 0.575,
+   "pct_within_1m": 73.6,
+   "keyframe_pct": 9.77,
+   "prop_ms_p50": 4.41
+  },
+  "keyframe every 25": {
+   "gs_hota_calib_only": 79.6,
+   "err_m_median": 0.698,
+   "pct_within_1m": 66.5,
+   "keyframe_pct": 3.93,
+   "prop_ms_p50": 4.38
+  },
+  "keyframe every 50": {
+   "gs_hota_calib_only": 72.52,
+   "err_m_median": 0.91,
+   "pct_within_1m": 54.1,
+   "keyframe_pct": 1.97,
+   "prop_ms_p50": 4.38
+  },
+  "first frame only": {
+   "gs_hota_calib_only": 29.4,
+   "err_m_median": 4.918,
+   "pct_within_1m": 15.5,
+   "keyframe_pct": 0.13,
+   "prop_ms_p50": 4.44
+  }
+ },
+ "calibration_rf_keypoints_2clips": {
+  "gs_hota_calib_only": 10.33,
+  "err_m_median": 6.998
+ },
+ "oracle_ladder_valid": {
+  "gt": 100.0,
+  "no_jersey": 36.74,
+  "no_team": 21.46,
+  "team_side_swapped": 22.06,
+  "roles_all_player": 88.25,
+  "pitch_noise_0.5m": 94.3,
+  "pitch_noise_1m": 75.51,
+  "pitch_noise_2m": 39.26,
+  "frame_bias_1m": 75.59,
+  "frame_bias_2m": 39.41,
+  "frame_bias_4m": 12.07,
+  "id_fragment_250f": 63.4,
+  "id_fragment_50f": 30.47,
+  "drop_10pct": 90.02
+ },
+ "oracle_swap_live_valid": {
+  "pred": 26.37,
+  "oracle_role": 27.94,
+  "oracle_team": 30.83,
+  "oracle_jersey": 39.03,
+  "oracle_team+jersey": 50.22,
+  "oracle_all_attrs": 60.45,
+  "oracle_pitch": 30.27,
+  "oracle_pitch+attrs": 72.0
+ },
+ "oracle_swap_offline_valid": {
+  "pred": 32.19,
+  "oracle_role": 33.58,
+  "oracle_team": 35.03,
+  "oracle_jersey": 44.1,
+  "oracle_team+jersey": 50.24,
+  "oracle_all_attrs": 60.56,
+  "oracle_pitch": 37.12,
+  "oracle_pitch+attrs": 72.12
+ },
+ "tracker_sweep_gsr_valid": [
+  {
+   "name": "bm_bytetrack_low",
+   "hota": 0.548,
+   "assa": 0.435,
+   "idf1": 0.626,
+   "id_switches": 3607,
+   "track_ms": 3.449
+  },
+  {
+   "name": "rf_sort",
+   "hota": 0.504,
+   "assa": 0.363,
+   "idf1": 0.532,
+   "id_switches": 12525,
+   "track_ms": 0.585
+  },
+  {
+   "name": "rf_bytetrack",
+   "hota": 0.584,
+   "assa": 0.489,
+   "idf1": 0.684,
+   "id_switches": 3462,
+   "track_ms": 0.631
+  },
+  {
+   "name": "rf_cbiou",
+   "hota": 0.577,
+   "assa": 0.478,
+   "idf1": 0.671,
+   "id_switches": 2427,
+   "track_ms": 1.058
+  },
+  {
+   "name": "rf_ocsort",
+   "hota": 0.46,
+   "assa": 0.351,
+   "idf1": 0.527,
+   "id_switches": 4080,
+   "track_ms": 0.974
+  },
+  {
+   "name": "rf_botsort_nocmc",
+   "hota": 0.536,
+   "assa": 0.427,
+   "idf1": 0.613,
+   "id_switches": 2808,
+   "track_ms": 1.021
+  },
+  {
+   "name": "rf_botsort_cmc",
+   "hota": 0.594,
+   "assa": 0.505,
+   "idf1": 0.694,
+   "id_switches": 2025,
+   "track_ms": 42.31
+  },
+  {
+   "name": "rf_mcbyte_nocmc",
+   "hota": 0.54,
+   "assa": 0.432,
+   "idf1": 0.62,
+   "id_switches": 2775,
+   "track_ms": 0.817
+  },
+  {
+   "name": "rf_mcbyte_cmc",
+   "hota": 0.597,
+   "assa": 0.51,
+   "idf1": 0.701,
+   "id_switches": 2014,
+   "track_ms": 27.523
+  },
+  {
+   "name": "rf_mcbyte_sharedcmc",
+   "hota": 0.596,
+   "assa": 0.507,
+   "idf1": 0.699,
+   "id_switches": 2015,
+   "track_ms": 12.204
+  }
+ ],
+ "sportsmot_val": {
+  "zero_shot_bytetrack": 0.431,
+  "finetuned_boxmot_bytetrack": 0.558,
+  "finetuned_rf_bytetrack": 0.645,
+  "finetuned_rf_mcbyte_cmc_interp": 0.655
+ },
+ "speed_stages_ms_fp32": {
+  "decode": 5.58,
+  "detect": 6.64,
+  "pose": 7.02,
+  "motion_prop": 6.94,
+  "track": 0.96,
+  "team_feat": 1.47,
+  "keyframe_calib_amortised": 4.78,
+  "keyframe_calib_per_call": 47.65
+ },
+ "speed_jersey_ms": 9.42,
+ "speed_tensorrt_fp16_ms": {
+  "detect": 5.0,
+  "pose": 5.11
+ },
+ "live_runner": {
+  "without_jersey": {
+   "sustained_fps": 44.2,
+   "latency_ms_p50": 44.3,
+   "latency_ms_p95": 57.5
+  },
+  "with_jersey": {
+   "sustained_fps": 31.95,
+   "latency_ms_p50": 56.0,
+   "latency_ms_p95": 64.3
+  }
+ }
+}
