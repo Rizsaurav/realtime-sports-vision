@@ -247,11 +247,11 @@ def main():
     ap.add_argument("--link-number", action="store_true",
                     help="causal identity linking by (team, jersey)")
     ap.add_argument("--stitch", action="store_true", help="online pitch-space track stitching")
-    ap.add_argument("--stitch-gap", type=int, default=75)
+    ap.add_argument("--stitch-gap", type=int, default=150)
     ap.add_argument("--stitch-vmax", type=float, default=0.4, help="metres per frame")
     ap.add_argument("--stitch-d0", type=float, default=2.0)
     ap.add_argument("--stitch-feat", type=float, default=3.0)
-    ap.add_argument("--role-window", type=int, default=0,
+    ap.add_argument("--role-window", type=int, default=25,
                     help="frames of history for the role vote (0 = whole track)")
     args = ap.parse_args()
 

@@ -92,6 +92,7 @@ def main():
         data["e2e_valid_ablation"].append({"name": name, "variant": pre, "gs_hota": s, "pitch_hota": p})
     data["e2e_test_final"], data["pitch_hota_test_final"] = e2e_series(et, "test_final")
     data["e2e_test_ft"], _ = e2e_series(et, "test_v7_ft")
+    data["e2e_valid_trt_fp16"], data["pitch_hota_valid_trt_fp16"] = e2e_series(ev, "valid_trt_fp16")
     data["delays"] = [d for _, d in DELAYS]
 
     # ---- component curves --------------------------------------------------
@@ -162,6 +163,10 @@ def main():
         "without_jersey": {k: la[k] for k in ("sustained_fps", "latency_ms_p50", "latency_ms_p95")},
         "with_jersey": {k: lj[k] for k in ("sustained_fps", "latency_ms_p50", "latency_ms_p95")}}
 
+    for name in ("paper_stats",):
+        f = R / f"{name}.json"
+        if f.exists():
+            data[name] = json.loads(f.read_text())
     for split in ("test", "valid"):
         f = R / f"gsr_bootstrap_{split}.json"
         if f.exists():

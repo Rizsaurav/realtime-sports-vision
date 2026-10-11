@@ -100,6 +100,14 @@
   41.59,
   43.03
  ],
+ "e2e_valid_trt_fp16": [
+  29.94,
+  31.66,
+  34.33,
+  36.46,
+  38.45
+ ],
+ "pitch_hota_valid_trt_fp16": 65.92,
  "delays": [
   "0",
   "1 s",
@@ -351,6 +359,103 @@
    "latency_ms_p50": 56.0,
    "latency_ms_p95": 64.3
   }
+ },
+ "paper_stats": {
+  "fragmentation_baseline_bytetrack_valid_live": {
+   "tracks_per_identity_mean": 2.81,
+   "breaks_total": 7318,
+   "breaks_no_gap_pct": 74.6,
+   "breaks_gap_visible_pct": 15.0,
+   "breaks_gap_offscreen_pct": 10.4
+  },
+  "fragmentation_final_valid_live": {
+   "tracks_per_identity_mean": 2.16,
+   "breaks_total": 2913,
+   "breaks_no_gap_pct": 53.2,
+   "breaks_gap_visible_pct": 30.7,
+   "breaks_gap_offscreen_pct": 16.2
+  },
+  "jersey_coverage_valid_gt_boxes_pretrained": {
+   "numbered_identities": 966,
+   "with_any_gated_read_pct": 97.0,
+   "with_correct_gated_read_pct": 89.2,
+   "never_legible_pct": 3.0
+  },
+  "jersey_coverage_valid_gt_boxes_finetuned": {
+   "numbered_identities": 966,
+   "with_any_gated_read_pct": 92.9,
+   "with_correct_gated_read_pct": 78.2,
+   "never_legible_pct": 7.1
+  },
+  "jersey_coverage_valid_gt_boxes_finetuned_gate0.9": {
+   "numbered_identities": 966,
+   "with_any_gated_read_pct": 97.0,
+   "with_correct_gated_read_pct": 84.1,
+   "never_legible_pct": 3.0
+  },
+  "jersey_coverage_valid_gt_boxes_pretrained_gate0.9": {
+   "numbered_identities": 966,
+   "with_any_gated_read_pct": 98.0,
+   "with_correct_gated_read_pct": 91.9,
+   "never_legible_pct": 2.0
+  },
+  "test_without_mislabeled_clips": {
+   "excluded": [
+    "SNGS-126",
+    "SNGS-131",
+    "SNGS-197"
+   ],
+   "L0": {
+    "all_clips": 34.57,
+    "n_kept": 46,
+    "gs_hota": 35.6
+   },
+   "L25": {
+    "all_clips": 37.09,
+    "n_kept": 46,
+    "gs_hota": 38.27
+   },
+   "L125": {
+    "all_clips": 39.89,
+    "n_kept": 46,
+    "gs_hota": 41.28
+   },
+   "L250": {
+    "all_clips": 42.13,
+    "n_kept": 46,
+    "gs_hota": 43.7
+   },
+   "Linf": {
+    "all_clips": 43.62,
+    "n_kept": 46,
+    "gs_hota": 45.23
+   }
+  },
+  "decision_stage": {
+   "clips": 5,
+   "decision_ms_per_frame_mean": 0.38,
+   "note": "batch replay of the causal decision code over whole clips, single CPU thread, L=0"
+  },
+  "detector_training": {
+   "epochs_run": 29,
+   "holdout_mAP50": 0.852,
+   "holdout_mAP50_95": 0.507
+  },
+  "jersey_finetune_log_excerpt": [
+   "[ft] 71812 train crops, 6489 holdout crops (5 clips)",
+   "[ft] epoch -1 (pretrained): holdout exact 81.01%",
+   "[ft] epoch 0: loss 0.2433  holdout exact 89.52%",
+   "[ft] saved runs/jersey/parseq_gsr_ft.ckpt",
+   "[ft] epoch 1: loss 0.1508  holdout exact 90.48%",
+   "[ft] saved runs/jersey/parseq_gsr_ft.ckpt",
+   "[ft] epoch 2: loss 0.1288  holdout exact 90.43%",
+   "[ft] epoch 3: loss 0.1167  holdout exact 90.55%",
+   "[ft] saved runs/jersey/parseq_gsr_ft.ckpt",
+   "[ft] epoch 4: loss 0.1088  holdout exact 90.61%",
+   "[ft] saved runs/jersey/parseq_gsr_ft.ckpt",
+   "[ft] epoch 5: loss 0.1047  holdout exact 90.60%",
+   "[ft] best holdout exact 90.61%"
+  ]
  },
  "bootstrap_test": {
   "split": "test",
