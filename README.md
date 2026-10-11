@@ -18,11 +18,14 @@ frozen from validation.
 | Output delay | 0 (live) | 1 s | 5 s | 10 s | offline |
 |---|---|---|---|---|---|
 | **test (49 clips)** | **34.6** | **37.1** | **39.9** | **42.1** | **43.6** |
+| test 95% CI (clip bootstrap) | 31.3-37.8 | 33.7-40.6 | 36.0-43.8 | 38.0-46.3 | 39.3-47.8 |
 | valid (58 clips) | 29.5 | 31.6 | 34.3 | 35.9 | 37.9 |
 
 - **Speed:** 32 FPS sustained on one H100 NVL with every stage running (TensorRT FP16
   detector and pose, asynchronous keyframe calibration), at 56 ms median and 64 ms p95
   processing latency.
+- **Delay gains are significant:** paired over the same clips, +2.5 at 1 s (95% CI +2.1 to
+  +2.9) and +9.0 offline (+5.6 to +12.4) over live.
 - **What waiting buys:** jersey recognition gains 17 points from live to offline and team
   assignment 9. Pitch calibration doesn't depend on delay.
 - **Where the gap is:** perfect jersey numbers alone would add 12.7 points live. Each real
@@ -90,7 +93,8 @@ python scripts/make_report.py
 
 Analysis scripts: `gsr_oracle_ladder.py` (error budget), `gsr_oracle_swap.py` (oracle
 attribute swaps), `gsr_team_eval.py` and `gsr_jersey_eval.py` (component curves),
-`sweep_trackers.py` (tracker sweep on cached detections), `bench_gsr_stages.py` and
+`sweep_trackers.py` (tracker sweep on cached detections), `gsr_bootstrap.py` (clip-level
+confidence intervals and paired tests), `bench_gsr_stages.py` and
 `bench_jersey_stage.py` (per-stage latency).
 
 ## Repo layout

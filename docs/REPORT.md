@@ -15,7 +15,8 @@ every decision is causal, evaluate it as a live system, and measure how accuracy
 on the one knob a live system controls: how long it may wait before committing an output
 (the output delay). On the 49 labelled SoccerNet-GSR test clips the system reaches
 **34.6 GS-HOTA with no lookahead and 43.6 with the whole clip**, rising steadily in
-between (37.1 at 1 s, 39.9 at 5 s, 42.1 at 10 s). The full pipeline sustains
+between (37.1 at 1 s, 39.9 at 5 s, 42.1 at 10 s); every step of delay is a significant gain under a
+paired clip-level bootstrap (1 s: +2.5, 95% CI [+2.1, +2.9]). The full pipeline sustains
 **32 FPS on one H100** (above the 25 FPS broadcast rate) at 56 ms median processing
 latency. Component curves show that delay matters very unequally: jersey recognition
 gains about 17 GS-HOTA points from waiting, team assignment about 9, and pitch
@@ -62,8 +63,11 @@ report answers is how much accuracy each second of delay buys, and where.
   tracklet post-processing are offline and no online GS-HOTA is reported.
 - **2025 challenge** [3]: the top entries (63.90, 63.81, 62.76, 61.64) use vision-language
   models for jersey and role, whole-clip split/merge, or both. No speed is reported.
-- **Broadcast2Pitch** [4] (WACV 2026) and its extension: offline-oriented, with
-  vision-language refinement. We could not access the full papers to check their runtime.
+- **Broadcast2Pitch** [4] (WACV 2026, 2025 challenge winner): keypoint and line calibration,
+  appearance re-identification and vision-language-guided tracklet refinement. Neither the
+  paper's abstract nor its public code report runtime or online operation; the code runs as
+  sequential scripts, with tracklet refinement as a separate step on saved tracking results.
+  We could not access the full text of its depth-aware extension (Broadcast2Pitch++) to check.
 - **Building blocks** used here: PnLCalib for camera calibration [5]; the jersey
   recognition framework of Koshkina and Elder (legibility classifier plus PARSeq) [6, 7];
   ByteTrack-family trackers from the open-source `trackers` library, including McByte and
@@ -161,11 +165,26 @@ Valid (58 clips), cumulative ablation:
 | + (team, jersey) identity linking | 28.7 | 30.5 | 33.1 | 34.7 | 36.4 | 65.8 |
 | **+ pose-guided jersey crops (final)** | **29.5** | **31.6** | **34.3** | **35.9** | **37.9** | **66.0** |
 
+Paired clip bootstrap of each step on valid (live / offline, 95% CI): camera-motion
+compensation +0.1 [-0.4, +0.6] / -0.2 [-1.4, +0.8] (not significant); gating
++1.4 [+0.8, +2.0] / +3.3 [+2.3, +4.4]; stitching +0.9 [+0.2, +1.6] / +0.9 [-0.8, +2.7];
+number linking 0.0 [-0.2, +0.2] / +0.2 [+0.0, +0.4]; pose crops +0.9 [+0.5, +1.3] /
++1.5 [+0.9, +2.2]. First version to final: +3.2 [+1.9, +4.5] live and +5.7 [+3.2, +8.1]
+offline.
+
 Test (49 clips), final configuration, settings frozen from valid:
 
 | Configuration | 0 | 1 s | 5 s | 10 s | offline | pitch HOTA |
 |---|---|---|---|---|---|---|
 | **final** | **34.6** | **37.1** | **39.9** | **42.1** | **43.6** | **66.1** |
+| 95% CI (clip bootstrap) | 31.3-37.8 | 33.7-40.6 | 36.0-43.8 | 38.0-46.3 | 39.3-47.8 | |
+
+Confidence intervals come from resampling the 49 test clips 2,000 times and recombining
+them with TrackEval's own pooling, so each resample is an exact GS-HOTA
+(`scripts/gsr_bootstrap.py`). The absolute intervals are wide (about ±3 to ±4 points)
+because clips differ a lot in difficulty. Paired differences on the same resampled clips
+are much tighter: delay gains +2.5 [+2.1, +2.9] at 1 s, +5.3 [+4.0, +6.8] at 5 s and
++9.0 [+5.6, +12.4] offline over live, all with P(gain ≤ 0) < 0.001.
 
 ![End-to-end delay curve](report/fig_delay_curve.png)
 
@@ -237,7 +256,8 @@ process's own p95 rises to 124 ms per frame.
   tracker's own estimator (0.596 vs 0.597 HOTA) at less than half the CPU cost.
 - **A fine-tuned jersey reader.** Fine-tuning PARSeq on 72k weakly labelled legible GSR
   crops raised exact accuracy on held-out legible crops from 81.0% to 90.6%, but test
-  GS-HOTA stayed flat (34.7 live, 43.0 offline vs 34.6, 43.6). The remaining jersey loss
+  GS-HOTA stayed flat (34.7 live, 43.0 offline vs 34.6, 43.6; paired differences +0.1
+  [-0.4, +0.8] and -0.6 [-1.7, +0.3]). The remaining jersey loss
   is coverage (numbers never legible) and identity loss across track breaks, not misreads.
 - **A small two-digit jersey classifier** trained on tracklet labels learned kit
   appearance rather than digits (11% track accuracy).
@@ -253,7 +273,9 @@ was the bottleneck, not its thresholds.
 
 ## 6. Limitations
 
-- Single runs; no confidence intervals or per-clip variance yet.
+- Confidence intervals cover clip sampling only; each configuration was trained and run
+  once, so run-to-run variance (detector training seed, tracker nondeterminism) is not
+  included.
 - Public test split, not the hidden challenge split; no like-for-like comparison with
   leaderboard entries.
 - Speed is measured on one clip and one GPU type, with the jersey reader as a separate

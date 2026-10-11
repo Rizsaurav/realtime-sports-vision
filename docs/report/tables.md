@@ -17,6 +17,43 @@
 | final (pretrained jersey reader) | 34.6 | 37.1 | 39.9 | 42.1 | 43.6 | 66.1 |
 | final, fine-tuned jersey reader | 34.7 | 37.2 | 39.6 | 41.6 | 43.0 | - |
 
+## Clip-level bootstrap, test (49 clips, 2000 resamples)
+
+| Set | GS-HOTA | 95% CI |
+|---|---|---|
+| live | 34.57 | [31.32, 37.79] |
+| d1s | 37.09 | [33.69, 40.56] |
+| d5s | 39.89 | [36.04, 43.77] |
+| d10s | 42.13 | [37.98, 46.30] |
+| offline | 43.62 | [39.33, 47.78] |
+| ft_live | 34.67 | [31.41, 37.95] |
+| ft_offline | 43.03 | [38.93, 46.97] |
+
+| Paired difference | diff | 95% CI | P(diff <= 0) |
+|---|---|---|---|
+| d1s - live | +2.51 | [+2.13, +2.93] | 0.000 |
+| d5s - live | +5.31 | [+3.95, +6.82] | 0.000 |
+| offline - live | +9.04 | [+5.55, +12.36] | 0.000 |
+| ft_live - live | +0.10 | [-0.43, +0.75] | 0.397 |
+| ft_offline - offline | -0.59 | [-1.66, +0.29] | 0.880 |
+
+## Paired bootstrap of ablation steps, valid (58 clips)
+
+| Paired difference | diff | 95% CI | P(diff <= 0) |
+|---|---|---|---|
+| e2e_mcbyte_shcmc2_L0 - e2e_rw25_L0 | +0.09 | [-0.44, +0.64] | 0.373 |
+| e2e_v3_gated_L0 - e2e_mcbyte_shcmc2_L0 | +1.35 | [+0.80, +1.95] | 0.000 |
+| e2e_v3_gated_stitch_L0 - e2e_v3_gated_L0 | +0.87 | [+0.18, +1.61] | 0.003 |
+| e2e_v4_link_L0 - e2e_v3_gated_stitch_L0 | -0.00 | [-0.18, +0.15] | 0.524 |
+| e2e_v5_pose_L0 - e2e_v4_link_L0 | +0.87 | [+0.49, +1.31] | 0.000 |
+| e2e_v5_pose_L0 - e2e_rw25_L0 | +3.17 | [+1.89, +4.54] | 0.000 |
+| e2e_mcbyte_shcmc2_Linf - e2e_rw25_Linf | -0.23 | [-1.39, +0.80] | 0.671 |
+| e2e_v3_gated_Linf - e2e_mcbyte_shcmc2_Linf | +3.27 | [+2.26, +4.38] | 0.000 |
+| e2e_v3_gated_stitch_Linf - e2e_v3_gated_Linf | +0.94 | [-0.84, +2.66] | 0.136 |
+| e2e_v4_link_Linf - e2e_v3_gated_stitch_Linf | +0.19 | [+0.02, +0.36] | 0.014 |
+| e2e_v5_pose_Linf - e2e_v4_link_Linf | +1.51 | [+0.86, +2.19] | 0.000 |
+| e2e_v5_pose_Linf - e2e_rw25_Linf | +5.69 | [+3.23, +8.11] | 0.000 |
+
 ## Component curves, valid (other attributes from ground truth)
 
 | Component | 0 | 1 s | 5 s | 10 s | offline |

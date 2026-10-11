@@ -351,5 +351,292 @@
    "latency_ms_p50": 56.0,
    "latency_ms_p95": 64.3
   }
+ },
+ "bootstrap_test": {
+  "split": "test",
+  "n_boot": 2000,
+  "n_clips": 49,
+  "sets": {
+   "live": {
+    "gs_hota": 34.57,
+    "ci95": [
+     31.32,
+     37.79
+    ]
+   },
+   "d1s": {
+    "gs_hota": 37.09,
+    "ci95": [
+     33.69,
+     40.56
+    ]
+   },
+   "d5s": {
+    "gs_hota": 39.89,
+    "ci95": [
+     36.04,
+     43.77
+    ]
+   },
+   "d10s": {
+    "gs_hota": 42.13,
+    "ci95": [
+     37.98,
+     46.3
+    ]
+   },
+   "offline": {
+    "gs_hota": 43.62,
+    "ci95": [
+     39.33,
+     47.78
+    ]
+   },
+   "ft_live": {
+    "gs_hota": 34.67,
+    "ci95": [
+     31.41,
+     37.95
+    ]
+   },
+   "ft_offline": {
+    "gs_hota": 43.03,
+    "ci95": [
+     38.93,
+     46.97
+    ]
+   }
+  },
+  "pairs": {
+   "d1s - live": {
+    "diff": 2.51,
+    "ci95": [
+     2.13,
+     2.93
+    ],
+    "p_le_0": 0.0
+   },
+   "d5s - live": {
+    "diff": 5.31,
+    "ci95": [
+     3.95,
+     6.82
+    ],
+    "p_le_0": 0.0
+   },
+   "offline - live": {
+    "diff": 9.04,
+    "ci95": [
+     5.55,
+     12.36
+    ],
+    "p_le_0": 0.0
+   },
+   "ft_live - live": {
+    "diff": 0.1,
+    "ci95": [
+     -0.43,
+     0.75
+    ],
+    "p_le_0": 0.397
+   },
+   "ft_offline - offline": {
+    "diff": -0.59,
+    "ci95": [
+     -1.66,
+     0.29
+    ],
+    "p_le_0": 0.88
+   }
+  }
+ },
+ "bootstrap_valid": {
+  "split": "valid",
+  "n_boot": 2000,
+  "n_clips": 58,
+  "sets": {
+   "e2e_rw25_L0": {
+    "gs_hota": 26.37,
+    "ci95": [
+     23.37,
+     29.42
+    ]
+   },
+   "e2e_rw25_Linf": {
+    "gs_hota": 32.19,
+    "ci95": [
+     28.66,
+     35.66
+    ]
+   },
+   "e2e_mcbyte_shcmc2_L0": {
+    "gs_hota": 26.46,
+    "ci95": [
+     23.47,
+     29.5
+    ]
+   },
+   "e2e_mcbyte_shcmc2_Linf": {
+    "gs_hota": 31.96,
+    "ci95": [
+     28.39,
+     35.39
+    ]
+   },
+   "e2e_v3_gated_L0": {
+    "gs_hota": 27.81,
+    "ci95": [
+     24.48,
+     31.13
+    ]
+   },
+   "e2e_v3_gated_Linf": {
+    "gs_hota": 35.23,
+    "ci95": [
+     31.4,
+     39.1
+    ]
+   },
+   "e2e_v3_gated_stitch_L0": {
+    "gs_hota": 28.68,
+    "ci95": [
+     25.09,
+     32.11
+    ]
+   },
+   "e2e_v3_gated_stitch_Linf": {
+    "gs_hota": 36.17,
+    "ci95": [
+     32.13,
+     40.25
+    ]
+   },
+   "e2e_v4_link_L0": {
+    "gs_hota": 28.68,
+    "ci95": [
+     25.11,
+     32.12
+    ]
+   },
+   "e2e_v4_link_Linf": {
+    "gs_hota": 36.37,
+    "ci95": [
+     32.35,
+     40.38
+    ]
+   },
+   "e2e_v5_pose_L0": {
+    "gs_hota": 29.54,
+    "ci95": [
+     25.98,
+     33.16
+    ]
+   },
+   "e2e_v5_pose_Linf": {
+    "gs_hota": 37.88,
+    "ci95": [
+     33.55,
+     42.22
+    ]
+   }
+  },
+  "pairs": {
+   "e2e_mcbyte_shcmc2_L0 - e2e_rw25_L0": {
+    "diff": 0.09,
+    "ci95": [
+     -0.44,
+     0.64
+    ],
+    "p_le_0": 0.3735
+   },
+   "e2e_v3_gated_L0 - e2e_mcbyte_shcmc2_L0": {
+    "diff": 1.35,
+    "ci95": [
+     0.8,
+     1.95
+    ],
+    "p_le_0": 0.0
+   },
+   "e2e_v3_gated_stitch_L0 - e2e_v3_gated_L0": {
+    "diff": 0.87,
+    "ci95": [
+     0.18,
+     1.61
+    ],
+    "p_le_0": 0.003
+   },
+   "e2e_v4_link_L0 - e2e_v3_gated_stitch_L0": {
+    "diff": -0.0,
+    "ci95": [
+     -0.18,
+     0.15
+    ],
+    "p_le_0": 0.5245
+   },
+   "e2e_v5_pose_L0 - e2e_v4_link_L0": {
+    "diff": 0.87,
+    "ci95": [
+     0.49,
+     1.31
+    ],
+    "p_le_0": 0.0
+   },
+   "e2e_v5_pose_L0 - e2e_rw25_L0": {
+    "diff": 3.17,
+    "ci95": [
+     1.89,
+     4.54
+    ],
+    "p_le_0": 0.0
+   },
+   "e2e_mcbyte_shcmc2_Linf - e2e_rw25_Linf": {
+    "diff": -0.23,
+    "ci95": [
+     -1.39,
+     0.8
+    ],
+    "p_le_0": 0.671
+   },
+   "e2e_v3_gated_Linf - e2e_mcbyte_shcmc2_Linf": {
+    "diff": 3.27,
+    "ci95": [
+     2.26,
+     4.38
+    ],
+    "p_le_0": 0.0
+   },
+   "e2e_v3_gated_stitch_Linf - e2e_v3_gated_Linf": {
+    "diff": 0.94,
+    "ci95": [
+     -0.84,
+     2.66
+    ],
+    "p_le_0": 0.1355
+   },
+   "e2e_v4_link_Linf - e2e_v3_gated_stitch_Linf": {
+    "diff": 0.19,
+    "ci95": [
+     0.02,
+     0.36
+    ],
+    "p_le_0": 0.014
+   },
+   "e2e_v5_pose_Linf - e2e_v4_link_Linf": {
+    "diff": 1.51,
+    "ci95": [
+     0.86,
+     2.19
+    ],
+    "p_le_0": 0.0
+   },
+   "e2e_v5_pose_Linf - e2e_rw25_Linf": {
+    "diff": 5.69,
+    "ci95": [
+     3.23,
+     8.11
+    ],
+    "p_le_0": 0.0
+   }
+  }
  }
 }

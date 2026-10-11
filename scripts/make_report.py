@@ -162,6 +162,11 @@ def main():
         "without_jersey": {k: la[k] for k in ("sustained_fps", "latency_ms_p50", "latency_ms_p95")},
         "with_jersey": {k: lj[k] for k in ("sustained_fps", "latency_ms_p50", "latency_ms_p95")}}
 
+    for split in ("test", "valid"):
+        f = R / f"gsr_bootstrap_{split}.json"
+        if f.exists():
+            data[f"bootstrap_{split}"] = json.loads(f.read_text())
+
     (OUT / "data.json").write_text(json.dumps(data, indent=1))
 
     # ---- tables --------------------------------------------------------------
@@ -173,6 +178,21 @@ def main():
     t += md_table(hdr, [["final (pretrained jersey reader)"] + [fmt(x) for x in data["e2e_test_final"]]
                         + [fmt(data["pitch_hota_test_final"])],
                         ["final, fine-tuned jersey reader"] + [fmt(x) for x in data["e2e_test_ft"]] + ["-"]])
+    if "bootstrap_test" in data:
+        bt = data["bootstrap_test"]
+        t += f"\n## Clip-level bootstrap, test ({bt['n_clips']} clips, {bt['n_boot']} resamples)\n\n"
+        t += md_table(["Set", "GS-HOTA", "95% CI"],
+                      [[k, f"{v['gs_hota']:.2f}", f"[{v['ci95'][0]:.2f}, {v['ci95'][1]:.2f}]"]
+                       for k, v in bt["sets"].items()])
+        t += "\n" + md_table(["Paired difference", "diff", "95% CI", "P(diff <= 0)"],
+                             [[k, f"{v['diff']:+.2f}", f"[{v['ci95'][0]:+.2f}, {v['ci95'][1]:+.2f}]",
+                               f"{v['p_le_0']:.3f}"] for k, v in bt["pairs"].items()])
+    if "bootstrap_valid" in data:
+        bv = data["bootstrap_valid"]
+        t += f"\n## Paired bootstrap of ablation steps, valid ({bv['n_clips']} clips)\n\n"
+        t += md_table(["Paired difference", "diff", "95% CI", "P(diff <= 0)"],
+                      [[k, f"{v['diff']:+.2f}", f"[{v['ci95'][0]:+.2f}, {v['ci95'][1]:+.2f}]",
+                        f"{v['p_le_0']:.3f}"] for k, v in bv["pairs"].items()])
     t += "\n## Component curves, valid (other attributes from ground truth)\n\n"
     rows = [[f"jersey: {k}"] + [fmt(x) for x in v] for k, v in data["jersey_only_valid"].items()]
     rows += [[f"team: {k}"] + [fmt(x) for x in v] for k, v in data["team_only_valid"].items()]
