@@ -108,6 +108,13 @@ def create_app(cfg, root="."):
         hub.loop = asyncio.get_running_loop()
         threading.Thread(target=load, daemon=True).start()
 
+    @app.on_event("shutdown")
+    async def shutdown():
+        if state["pipe"] is not None:
+            await asyncio.to_thread(state["pipe"].stop)
+        if state["models"] is not None and state["models"].calib is not None:
+            state["models"].calib.close()
+
     @app.get("/")
     async def index():
         return FileResponse(WEB / "index.html")

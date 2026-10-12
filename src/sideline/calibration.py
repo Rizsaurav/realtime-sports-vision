@@ -72,8 +72,14 @@ def _worker(repo, w_kp, w_line, device, inq, outq):
     cal = PnLCalibrator(repo, w_kp, w_line, device=device)
     cal.homography(np.zeros((540, 960, 3), np.uint8))          # warm-up
     outq.put(("ready", None))
+    parent = os.getppid()
     while True:
-        item = inq.get()
+        try:
+            item = inq.get(timeout=1.0)
+        except Exception:                                   # queue.Empty: exit if the app is gone
+            if os.getppid() != parent:
+                return
+            continue
         if item is None:
             return
         k, small = item
@@ -126,3 +132,6 @@ class CalibWorker:
             self.inq.put_nowait(None)
         except Exception:
             pass
+        self.proc.join(timeout=5)
+        if self.proc.is_alive():
+            self.proc.terminate()
