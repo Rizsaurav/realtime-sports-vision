@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sideline Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="name">SIDELINE</span>
+    <span class="onair" id="onair">OFF AIR</span>
+  </div>
+
+  <form class="source" id="sourceForm" autocomplete="off">
+    <input id="sourceInput" list="sourceList" placeholder="Clip, video file, rtsp:// or YouTube URL" spellcheck="false">
+    <datalist id="sourceList"></datalist>
+    <label class="loop"><input type="checkbox" id="loop"> loop</label>
+    <button type="submit" id="startBtn" class="btn primary">Start</button>
+    <button type="button" id="stopBtn" class="btn">Stop</button>
+  </form>
+
+  <div class="delay" role="radiogroup" aria-label="Output delay" id="delayGroup"></div>
+</header>
+
+<main class="stage">
+  <section class="panel feed">
+    <div class="panel-head">
+      <h2>Broadcast</h2>
+      <span class="meta" id="frameMeta">frame -</span>
+    </div>
+    <div class="feed-wrap">
+      <canvas id="feed" width="960" height="540"></canvas>
+      <div class="empty" id="feedEmpty">
+        <p class="big">No feed</p>
+        <p>Pick a clip or paste a stream URL, then press Start.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel pitch">
+    <div class="panel-head">
+      <h2>Minimap</h2>
+      <span class="meta" id="delayMeta">live</span>
+    </div>
+    <div class="pitch-wrap">
+      <canvas id="pitch" width="1100" height="740"></canvas>
+    </div>
+    <div class="legend" id="legend">
+      <span><i class="dot" data-side="left"></i><b id="leftName">Left team</b></span>
+      <span><i class="dot" data-side="right"></i><b id="rightName">Right team</b></span>
+      <span><i class="dot ref"></i>Referee</span>
+      <span><i class="dot ball"></i>Ball</span>
+    </div>
+  </section>
+
+  <aside class="panel side">
+    <div class="panel-head"><h2>System</h2><span class="meta" id="calib">uncalibrated</span></div>
+    <dl class="tele">
+      <div><dt>Throughput</dt><dd><span id="fps">0</span><small> / 25 fps</small></dd></div>
+      <div><dt>Latency p50</dt><dd><span id="lat">-</span><small> ms</small></dd></div>
+      <div><dt>Shown behind live</dt><dd><span id="behind">0.0</span><small> s</small></dd></div>
+      <div><dt>Dropped</dt><dd><span id="dropped">0</span><small> frames</small></dd></div>
+    </dl>
+    <div class="stages" id="stages"></div>
+
+    <div class="panel-head sub"><h2>Rosters</h2><span class="meta" id="onPitch">0 on screen</span></div>
+    <div class="rosters">
+      <div class="roster" data-side="left"><h3 id="leftRosterName">Left</h3><ol id="leftRoster"></ol></div>
+      <div class="roster" data-side="right"><h3 id="rightRosterName">Right</h3><ol id="rightRoster"></ol></div>
+    </div>
+    <p class="note" id="note">Waiting lets the system read more jersey numbers and settle team colours before it commits. Live shows frames as they happen.</p>
+  </aside>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

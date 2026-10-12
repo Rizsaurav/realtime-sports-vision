@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sideline"
+version = "0.1.0"
+description = "Live soccer minimap from a single broadcast feed"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy<2.5",
+  "opencv-python-headless",
+  "pyyaml",
+  "torch",
+  "ultralytics>=8.4",
+  "trackers==2.6.1",
+  "supervision",
+]
+
+[project.optional-dependencies]
+live = ["fastapi>=0.116,<0.117", "starlette>=0.46,<0.48", "uvicorn[standard]>=0.32", "yt-dlp"]
+dev = ["pytest"]
+
+[project.scripts]
+sideline = "sideline.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["sideline*", "calibration*"]
+
+[tool.setuptools.package-data]
+sideline = ["web/*"]

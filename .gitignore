@@ -27,3 +27,6 @@ engines/
 .idea/
 .vscode/
 weights/
+
+# Live app model exports (licensed weights; regenerate with scripts/export_jersey_onnx.py)
+models/
