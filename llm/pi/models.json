@@ -1,0 +1,33 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "qwen-box": {
+      "name": "Qwen3.8-27B on the GPU box (via SSH forward)",
+      "baseUrl": "http://localhost:8000/v1",
+      "api": "openai-completions",
+      "apiKey": "none",
+      "models": [
+        {
+          "id": "qwen3.8-27b",
+          "name": "Qwen3.8-27B",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 131072,
+          "maxTokens": 65536,
+          "samplingParams": { "temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0.0 },
+          "samplingParamsByThinkingLevel": {
+            "off": { "temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0, "presence_penalty": 1.5 }
+          },
+          "compat": {
+            "thinkingFormat": "chat-template",
+            "chatTemplateKwargs": { "enable_thinking": { "$var": "thinking.enabled" } },
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": false,
+            "maxTokensField": "max_tokens",
+            "supportsUsageInStreaming": true
+          }
+        }
+      ]
+    }
+  }
+}

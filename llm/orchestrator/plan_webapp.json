@@ -1,0 +1,112 @@
+{
+  "name": "webapp-night-1",
+  "base_repo": "/Users/saurav/Desktop/files/sideline-agents/base",
+  "base_branch": "webapp-base",
+  "root": "/Users/saurav/Desktop/files/sideline-agents/runs/night1",
+  "servers": [
+    8000,
+    8001
+  ],
+  "ssh_host": "scc",
+  "agents": 3,
+  "deadline_hours": 7,
+  "context_window": 262144,
+  "max_tokens": 98304,
+  "thinking": [
+    "medium",
+    "high",
+    "high",
+    "high",
+    "high"
+  ],
+  "python_packages": [
+    "pytest",
+    "fastapi",
+    "httpx",
+    "python-multipart",
+    "uvicorn"
+  ],
+  "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+  ],
+  "tasks": [
+    {
+      "id": "analytics",
+      "title": "analytics engine",
+      "spec": "tasks/analytics.md",
+      "acceptance": [
+        "python -m pytest tests/test_analytics.py -q"
+      ],
+      "depends_on": [],
+      "max_attempts": 5,
+      "timeout_min": 90
+    },
+    {
+      "id": "matches_api",
+      "title": "match library API",
+      "spec": "tasks/matches_api.md",
+      "acceptance": [
+        "python -m pytest tests/test_matches_api.py -q"
+      ],
+      "depends_on": [],
+      "max_attempts": 5,
+      "timeout_min": 90
+    },
+    {
+      "id": "replay_lib",
+      "title": "replay library",
+      "spec": "tasks/replay_lib.md",
+      "acceptance": [
+        "node --test web_tests/replay.test.mjs"
+      ],
+      "depends_on": [],
+      "max_attempts": 5,
+      "timeout_min": 90
+    },
+    {
+      "id": "ui_pages",
+      "title": "library and statistics pages",
+      "spec": "tasks/ui_pages.md",
+      "acceptance": [
+        "node --test web_tests/render.test.mjs"
+      ],
+      "depends_on": [],
+      "max_attempts": 5,
+      "timeout_min": 120
+    },
+    {
+      "id": "pitch_replay",
+      "title": "pitch drawing and replay view",
+      "spec": "tasks/replay_view.md",
+      "acceptance": [
+        "node --test web_tests/pitch.test.mjs"
+      ],
+      "depends_on": [
+        "replay_lib",
+        "ui_pages"
+      ],
+      "max_attempts": 5,
+      "timeout_min": 120
+    },
+    {
+      "id": "library_server",
+      "title": "match library application",
+      "spec": "tasks/library_server.md",
+      "acceptance": [
+        "python -m pytest tests/test_library_app.py -q"
+      ],
+      "depends_on": [
+        "analytics",
+        "matches_api",
+        "replay_lib",
+        "ui_pages"
+      ],
+      "max_attempts": 5,
+      "timeout_min": 90
+    }
+  ]
+}
