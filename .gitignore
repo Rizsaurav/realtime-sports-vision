@@ -30,3 +30,7 @@ weights/
 
 # Live app model exports (licensed weights; regenerate with scripts/export_jersey_onnx.py)
 models/
+
+# Small raw logs of the LLM serving experiments are part of the evidence
+!llm/results/
+!llm/results/**

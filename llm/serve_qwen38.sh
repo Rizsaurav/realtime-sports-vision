@@ -22,6 +22,7 @@ MEM_UTIL="${MEM_UTIL:-0.45}"        # about 42 GB of 94 GB: leaves room for othe
 MAX_SEQS="${MAX_SEQS:-8}"
 MTP="${MTP:-1}"
 MTP_TOKENS="${MTP_TOKENS:-3}"
+EAGER="${EAGER:-0}"                  # 1 = --enforce-eager (no CUDA graphs, no compile): the slow old setup
 
 export CUDA_VISIBLE_DEVICES="$GPU"
 export VLLM_USE_FLASHINFER_SAMPLER=0      # the FlashInfer sampler JIT needs nvcc 13; the env has only 12.9
@@ -35,6 +36,9 @@ fi
 PIDFILE="${PIDFILE:-/data/saurav/logs/qwen38-app.pid}"
 echo $$ > "$PIDFILE"      # exec keeps this pid, so llm/stop_qwen38.sh can stop exactly this server
 
+EXTRA=()
+[ "$EAGER" = "1" ] && EXTRA+=(--enforce-eager)
+
 exec "$VENV/bin/vllm" serve "$MODEL" \
   --served-model-name qwen3.8-27b \
   --host 127.0.0.1 --port "$PORT" \
@@ -45,4 +49,5 @@ exec "$VENV/bin/vllm" serve "$MODEL" \
   --enable-prefix-caching \
   --reasoning-parser qwen3 \
   --enable-auto-tool-choice --tool-call-parser qwen3_coder \
+  "${EXTRA[@]}" \
   "${SPEC[@]}"
