@@ -27,3 +27,7 @@ engines/
 .idea/
 .vscode/
 weights/
+
+# Small raw logs of the LLM serving experiments are part of the evidence
+!llm/results/
+!llm/results/**

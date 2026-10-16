@@ -1,0 +1,49 @@
+{
+ "ids_requested": 1,
+ "arms": {
+  "mtp3": {
+   "instances": 1,
+   "resolved": 1,
+   "mean_wall_s": 18.5,
+   "mean_api_calls": 6.0
+  }
+ },
+ "docker_after": {
+  "Images": {
+   "size": 7465000000.0,
+   "count": 4
+  },
+  "Containers": {
+   "size": 61440.0,
+   "count": 2
+  },
+  "Local Volumes": {
+   "size": 0.0,
+   "count": 0
+  },
+  "Build Cache": {
+   "size": 6684000000.0,
+   "count": 34
+  }
+ },
+ "docker_baseline": {
+  "Images": {
+   "size": 7465000000.0,
+   "count": 4
+  },
+  "Containers": {
+   "size": 61440.0,
+   "count": 2
+  },
+  "Local Volumes": {
+   "size": 0.0,
+   "count": 0
+  },
+  "Build Cache": {
+   "size": 6684000000.0,
+   "count": 34
+  }
+ },
+ "leftover_images": [],
+ "fs_growth_gb": 0.0
+}

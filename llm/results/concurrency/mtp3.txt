@@ -1,0 +1,5 @@
+level  aggregate tok/s  per-stream tok/s  acceptance
+    1            191.5             197.0         78%
+    2            280.4             196.7         77%
+    4            535.1             186.6         77%
+    8            939.4             174.7         78%
