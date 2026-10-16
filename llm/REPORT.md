@@ -25,7 +25,7 @@ An experimental write-up of a serving problem and what fixed it, with every numb
 | Model | Qwen3.8-27B, FP8 checkpoint, hybrid architecture: Gated-DeltaNet linear attention in 3 of every 4 layers, full attention every 4th layer, one built-in MTP head |
 | Engine | vLLM 0.29.0, torch 2.13 (CUDA 13.0), single GPU, bf16 KV cache |
 | Serving flags | `--max-model-len 65536 --gpu-memory-utilization 0.45 --max-num-seqs 8 --gdn-prefill-backend triton --enable-prefix-caching --reasoning-parser qwen3`, `VLLM_USE_FLASHINFER_SAMPLER=0` |
-| Sampling | temperature 0.6, top-p 0.95, top-k 20 (the model's recommended coding settings) |
+| Sampling | temperature 0.6, top-p 0.95, top-k 20 in these runs. The model card recommends temperature 1.0 with thinking on and 0.7 with thinking off, so these runs were not at the recommended settings (see section 5) |
 | Agent | mini-swe-agent 2.4.6 (tool calling), 100-step limit, thinking off |
 | Evaluation | swebench 5.x harness, SWE-bench Verified, official per-instance images |
 
@@ -112,6 +112,11 @@ What this does and does not show:
   accepted by rejection sampling, so sampled output follows the same distribution. Floating-point effects in the
   parallel verification still make outputs differ from plain decoding in detail (one 3090 study found 92-100% of
   greedy outputs diverge at 1,600 tokens), which is why a downstream test like this is worth running.
+- **These settings are not the model's best case.** The model card reports its agentic-coding scores (for example
+  SWE-bench Pro 61.7 and Terminal Bench 2.1 73.0) with thinking on, temperature 1.0 and a 256K context, and warns that
+  lower reasoning effort in multi-turn agent tasks can raise failures and retries. This run used thinking off,
+  temperature 0.6 and a 100-step cap, so its resolve rates should be read as a floor for this setup and not as a
+  statement about the model's coding ability. Section 10 repeats the question with the recommended settings.
 - **The measurement is limit-bound.** 59% and 75% of runs ended by hitting the 100-step limit, so these numbers measure
   "solved within 100 steps with thinking off", not the model's ceiling. They are far below the roughly 71% a related
   model (Qwen3-Coder-Next) reports with up to 300 turns (arXiv 2603.00729) and are not comparable to it.

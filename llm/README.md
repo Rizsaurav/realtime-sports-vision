@@ -30,8 +30,8 @@ llm/stop_qwen38.sh                       # stops exactly the server that was sta
    avoid it.
 
 Kept for quality: bf16 KV cache (only 16 of 64 layers use full attention, about 65 KB per token), no
-weight quantisation beyond the released FP8, and the model's recommended sampling (temperature 0.6,
-top-p 0.95, top-k 20) for coding.
+weight quantisation beyond the released FP8. The benchmarks here sampled at temperature 0.6, top-p 0.95, top-k 20,
+which is not what the model card recommends (temperature 1.0 with thinking on, 0.7 with thinking off).
 
 ## Memory
 
