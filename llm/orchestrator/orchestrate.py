@@ -33,8 +33,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "pi"))
 from run_pi_tasks import usage_stats  # noqa: E402
+sys.path.insert(0, str(HERE))
+import improve  # noqa: E402
 
 PROFILE = HERE / "agent.sb"
+PROFILE_CTX = HERE / "agent_ctx.sb"                # same plus read access to the tools folder
 PI_DIR = Path.home() / ".pi-install"
 PI_BIN = PI_DIR / "node_modules" / ".bin" / "pi"
 MODELS_JSON = HERE.parent / "pi" / "models.json"
@@ -63,9 +66,18 @@ class Night:
         self.log = open(self.root / "run.jsonl", "a")
         self.status = {"started": time.time(), "agents": {}, "servers": {}, "tasks": {}}
         self.tasks = {t["id"]: t for t in plan["tasks"]}
-        self.state = {t: "pending" for t in self.tasks}          # pending | running | done | failed | skipped
+        self.state = {t: ("done" if self.tasks[t].get("already_merged") else "pending") for t in self.tasks}
+        # states: pending | running | done | failed | skipped
         self.results = {}
         self.integration = self.root / "integration"
+        self.kit = bool(plan.get("context_kit"))
+        self.tools = Path(plan.get("tools_dir", self.root.parent.parent / "tools")).resolve()
+        self.graphify = self.tools / "graphify-venv" / "bin" / "graphify"
+        self.pyflakes = self.tools / "graphify-venv" / "bin" / "python"
+        self.lessons = []
+        lf = self.root / "lessons.md"
+        if lf.exists():
+            self.lessons = [l[2:].strip() for l in lf.read_text().splitlines() if l.startswith("- ")]
         name = sh(["git", "-C", self.base_repo, "config", "user.name"]).stdout.strip()
         email = sh(["git", "-C", self.base_repo, "config", "user.email"]).stdout.strip()
         self.ident = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_COMMITTER_NAME": name,
@@ -84,6 +96,11 @@ class Night:
         self.status["states"] = dict(self.state)
         with LOCK:
             (self.root / "status.json").write_text(json.dumps(self.status, indent=1, default=str))
+
+    def open_window(self, command):
+        """Open a Terminal window running `command` (plan flag: visible)."""
+        if self.plan.get("visible"):
+            sh(["osascript", "-e", f'tell application "Terminal" to do script "{command}"'], timeout=30)
 
     # -- model servers ---------------------------------------------------------------------------------------
     def server_ok(self, port):
@@ -118,6 +135,18 @@ class Night:
         sh(["git", "checkout", "-q", "-b", "integration", f"origin/{self.base_branch}"], cwd=self.integration, check=True)
         for k, v in (("user.name", self.ident["GIT_AUTHOR_NAME"]), ("user.email", self.ident["GIT_AUTHOR_EMAIL"])):
             sh(["git", "config", k, v], cwd=self.integration, check=True)
+        self.ignore_junk(self.integration)
+
+    JUNK = ["node_modules/", "__pycache__/", "*.pyc", ".pytest_cache/", ".coverage", ".context/", "graphify-out/", ".venv/", "venv/"]
+
+    def ignore_junk(self, repo):
+        """Keep build output and caches out of the agents' commits (written to .git/info/exclude, not the tree)."""
+        excl = Path(repo) / ".git" / "info" / "exclude"
+        cur = excl.read_text() if excl.exists() else ""
+        add = [j for j in self.JUNK if j not in cur.splitlines()]
+        if add:
+            excl.parent.mkdir(parents=True, exist_ok=True)
+            excl.write_text(cur + ("\n" if cur and not cur.endswith("\n") else "") + "\n".join(add) + "\n")
 
     def make_venv(self, home, packages):
         venv = home / "venv"
@@ -130,22 +159,25 @@ class Night:
         return venv
 
     def sandbox_cmd(self, d, cmd):
-        return ["sandbox-exec", "-f", str(PROFILE), "-D", f"WORK={d['work']}", "-D", f"AGENT_HOME={d['home']}",
+        prof = PROFILE_CTX if self.kit else PROFILE
+        extra = ["-D", f"TOOLS_DIR={self.tools}"] if self.kit else []
+        return ["sandbox-exec", "-f", str(prof), "-D", f"WORK={d['work']}", "-D", f"AGENT_HOME={d['home']}",
                 "-D", f"AGENT_TMP={d['tmp']}", "-D", f"NODE_DIR={self.node_dir}", "-D", f"PI_DIR={PI_DIR}",
-                *cmd]
+                *extra, *cmd]
 
     def agent_env(self, d):
         return {"HOME": str(d["home"]), "TMPDIR": str(d["tmp"]), "LANG": "en_US.UTF-8", "TERM": "dumb",
                 "VIRTUAL_ENV": str(d["home"] / "venv"), "PYTHONDONTWRITEBYTECODE": "1",
-                "PATH": f"{d['home'] / 'venv' / 'bin'}:{self.node_dir / 'bin'}:/usr/bin:/bin:/usr/sbin:/sbin",
+                "PATH": (f"{d['home'] / 'venv' / 'bin'}:{self.node_dir / 'bin'}:" +
+                         (f"{self.graphify.parent}:" if self.kit else "") + "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"),
                 **self.ident}
 
     def run_sandboxed(self, d, cmd, timeout, out_file=None):
         env = self.agent_env(d)
         full = self.sandbox_cmd(d, ["env", *[f"{k}={v}" for k, v in env.items()], *cmd])
         stdout = open(out_file, "w") if out_file else subprocess.PIPE
-        p = subprocess.Popen(full, cwd=d["work"], stdout=stdout, stderr=subprocess.STDOUT, text=True,
-                             start_new_session=True)
+        p = subprocess.Popen(full, cwd=d["work"], stdin=subprocess.DEVNULL, stdout=stdout, stderr=subprocess.STDOUT,
+                             text=True, start_new_session=True)       # closed stdin: Pi's one-shot mode waits for it
         try:
             out, _ = p.communicate(timeout=timeout)
             status = "ok"
@@ -162,6 +194,62 @@ class Night:
         return p.returncode, status, out or ""
 
     # -- one task --------------------------------------------------------------------------------------------
+    def build_context(self, d):
+        """Code graph of the repository for the agent: .context/GRAPH_REPORT.md and .context/graph.json (not committed)."""
+        if not self.kit:
+            return
+        work, ctx = d["work"], d["work"] / ".context"
+        ctx.mkdir(exist_ok=True)
+        snap = d["tmp"] / "graph_src"
+        shutil.rmtree(snap, ignore_errors=True)
+        snap.mkdir(parents=True)
+        for rel in self.plan.get("context_paths", ["src", "tests", "web_tests", "tasks", "docs"]):
+            src = work / rel
+            if src.is_dir():
+                shutil.copytree(src, snap / rel, ignore=shutil.ignore_patterns("__pycache__", "node_modules", "graphify-out",
+                                                                              "*.jsonl", "*.pyc"))
+            elif src.is_file():
+                (snap / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(src, snap / rel)
+        r = sh([str(self.graphify), "update", "."], cwd=snap, env={**self.agent_env(d), "GRAPHIFY_FORCE": "1"}, timeout=300)
+        out = snap / "graphify-out"
+        for name in ("graph.json", "GRAPH_REPORT.md"):
+            if (out / name).exists():
+                shutil.copy(out / name, ctx / name)
+        notes = ctx / "notes.md"
+        if not notes.exists():
+            notes.write_text("# Notes\n\nWrite short findings and decisions here. They survive between attempts.\n")
+        excl = work / ".git" / "info" / "exclude"
+        if ".context/" not in excl.read_text():
+            excl.write_text(excl.read_text() + "\n.context/\n")
+        self.event("context_built", ok=(ctx / "graph.json").exists(), detail=(r.stdout + r.stderr)[-120:].replace("\n", " "))
+
+    def add_lesson(self, text):
+        text = " ".join(str(text).split())[:300]
+        if len(text) < 12 or any(text.lower() == x.lower() for x in self.lessons):
+            return
+        with LOCK:
+            self.lessons = (self.lessons + [text])[-20:]
+            (self.root / "lessons.md").write_text("# Lessons\n\n" + "\n".join(f"- {x}" for x in self.lessons) + "\n")
+
+    def base_commit_of(self, d):
+        return d["base_commit"]
+
+    def run_pi_agent(self, d, port, prompt, thinking, timeout_min, tag):
+        """One Pi agent run in the sandbox (reviewer, tester or fixer). Returns its token usage."""
+        ev = d["work"].parent / f"events_{tag}.jsonl"
+        cmd = [str(PI_BIN), "--provider", "qwen-box", "--model", "qwen3.8-27b", "--no-session", "-nc", "-ne", "-ns",
+               "--no-mcp", "--thinking", thinking, "--mode", "json", "-p", prompt]
+        t0 = time.time()
+        self.wait_for_server(port)
+        rc, st, _ = self.run_sandboxed(d, cmd, 60 * timeout_min, out_file=ev)
+        u = usage_stats(ev) if ev.exists() else {}
+        tot = d.setdefault("usage_total", {"output_tokens": 0, "model_turns": 0})
+        for k in ("output_tokens", "model_turns"):
+            tot[k] += u.get(k, 0)
+        self.event("agent_run", tag=tag, status=st, seconds=round(time.time() - t0), output_tokens=u.get("output_tokens"))
+        return u
+
     def prompt_for(self, task, attempt, failure):
         checks = "\n".join(f"  {c}" for c in task["acceptance"])
         p = (f"You are one of several engineers working in parallel on a soccer-tracking web app. You work alone in the "
@@ -171,6 +259,9 @@ class Night:
              f"- Make these acceptance checks pass, and run them yourself often:\n{checks}\n"
              f"- You may not change anything under tests/, web_tests/, tasks/ or docs/WEBAPP_CONTRACT.md; changes there "
              f"are discarded.\n"
+             + (f"- You own only these files: {', '.join(task['owns'])}. Do not create or change any other file (another engineer "
+                f"owns them; changes elsewhere are reverted). If you need something from another module, import it.\n"
+                if task.get("owns") else "") +
              f"- Commit your work with git in small steps. Commit messages are short, imperative and describe the "
              f"change (for example \"Add heatmap binning\"). Never push.\n"
              f"- Do not write anything in code, comments, documentation or commit messages about who or what wrote "
@@ -178,6 +269,16 @@ class Night:
              f"- Work only inside this directory. Python packages install with pip (a virtual environment is active) "
              f"and JavaScript packages with npm.\n"
              f"- When every check passes, finish with a short summary of what you built.\n")
+        if self.lessons:
+            p += "\nLessons from earlier work on this project (apply them):\n" + "\n".join(f"- {x}" for x in self.lessons[-8:]) + "\n"
+        if self.kit:
+            p += ("\nContext aids (generated from the code, so they can be stale or incomplete):\n"
+                  "- `.context/GRAPH_REPORT.md` is a map of the codebase. Query it instead of reading many files: "
+                  "`graphify query \"<question>\" --graph .context/graph.json`, `graphify explain \"<Name>\" --graph .context/graph.json`, "
+                  "`graphify path \"A\" \"B\" --graph .context/graph.json`, and `graphify affected \"<Name>\" --graph .context/graph.json` "
+                  "(what depends on a name).\n"
+                  "- Always open the real file before you rely on it or edit it; if the map and the file disagree, the file is right.\n"
+                  "- Keep short notes of findings and decisions in `.context/notes.md` (it is not committed). Read it first if it has content.\n")
         if attempt > 1:
             p += (f"\nThis is attempt {attempt}. The previous attempt did not pass. The existing work is in the "
                   f"directory; fix it rather than starting over. The failing output was:\n\n{failure[-6000:]}\n")
@@ -212,6 +313,7 @@ class Night:
         sh(["git", "checkout", "-q", "-b", f"agent/{tid}"], cwd=work, check=True)
         for k, v in (("user.name", self.ident["GIT_AUTHOR_NAME"]), ("user.email", self.ident["GIT_AUTHOR_EMAIL"])):
             sh(["git", "config", k, v], cwd=work, check=True)
+        self.ignore_junk(work)
         base_commit = sh(["git", "rev-parse", "HEAD"], cwd=work).stdout.strip()
         self.make_venv(d["home"], self.plan.get("python_packages", []) + task.get("python_packages", []))
         if (work / "package.json").exists():
@@ -227,6 +329,12 @@ class Night:
         (agent_dir / "models.json").write_text(json.dumps(cfg, indent=1))
 
         failure, usage_total, t_task = "", {"output_tokens": 0, "model_turns": 0}, time.time()
+        d["base_commit"], d["usage_total"] = base_commit, usage_total
+        if task.get("type") == "improve":                      # polish work that is already merged: no build step
+            self.build_context(d)
+            quality = improve.improve_loop(self, task, d, port)
+            return {"status": "passed", "attempts": 0, "usage": usage_total, "work": str(work),
+                    "seconds": round(time.time() - t_task), "quality": quality}
         levels = task.get("thinking", self.plan.get("thinking", ["medium", "high", "high", "high"]))
         for attempt in range(1, task.get("max_attempts", 4) + 1):
             if (self.root / "STOP").exists() or time.time() > self.deadline:
@@ -235,6 +343,7 @@ class Night:
             if not self.wait_for_server(port):
                 return {"status": "no_server", "attempts": attempt - 1}
             thinking = levels[min(attempt - 1, len(levels) - 1)]
+            self.build_context(d)
             self.status["agents"][tid] = {"attempt": attempt, "phase": "agent", "since": time.time(), "port": port,
                                            "thinking": thinking}
             self.write_status()
@@ -253,9 +362,27 @@ class Night:
             sh(["git", "add", "-A"], cwd=work)
             if sh(["git", "status", "--porcelain"], cwd=work).stdout.strip():
                 sh(["git", "commit", "-q", "-m", f"Implement {task.get('title', tid)}"], cwd=work)
+            owns = task.get("owns")
+            if owns:
+                allowed = tuple(owns) + ("tests_extra/", "web_tests_extra/")
+                changed = sh(["git", "diff", "--name-only", base_commit, "HEAD"], cwd=work).stdout.split()
+                stray = [f for f in changed if not f.startswith(allowed)]
+                for f in stray:
+                    if sh(["git", "cat-file", "-e", f"{base_commit}:{f}"], cwd=work).returncode == 0:
+                        sh(["git", "checkout", base_commit, "--", f], cwd=work)
+                    else:
+                        sh(["git", "rm", "-q", "-f", "--ignore-unmatch", f], cwd=work)
+                if stray:
+                    sh(["git", "commit", "-q", "-m", "Revert changes to files owned by other work"], cwd=work)
+                    self.event("reverted_foreign_files", task=tid, files=",".join(stray)[:150])
+                    foreign_note = "Files you do not own were reverted: " + ", ".join(stray) + "\n"
+                else:
+                    foreign_note = ""
+            else:
+                foreign_note = ""
             self.status["agents"][tid]["phase"] = "acceptance"
             self.write_status()
-            ok, out = True, ""
+            ok, out = True, foreign_note
             for c in task["acceptance"]:
                 rc2, st, o = self.run_sandboxed(d, ["/bin/sh", "-c", c], timeout=900)
                 out += f"$ {c}\n{o[-4000:]}\n"
@@ -270,8 +397,9 @@ class Night:
                        output_tokens=usage.get("output_tokens"), turns=usage.get("model_turns"),
                        tail=out[-300:].replace("\n", " | "))
             if ok:
+                quality = improve.improve_loop(self, task, d, port) if (self.plan.get("improve") and task.get("improve", True)) else None
                 return {"status": "passed", "attempts": attempt, "usage": usage_total, "work": str(work),
-                        "seconds": round(time.time() - t_task)}
+                        "seconds": round(time.time() - t_task), "quality": quality}
             failure = out
         return {"status": "failed", "attempts": task.get("max_attempts", 4), "usage": usage_total, "work": str(work),
                 "seconds": round(time.time() - t_task), "last_failure": failure[-1500:]}
@@ -329,6 +457,7 @@ class Night:
                 time.sleep(10)
                 continue
             self.event("task_start", task=task["id"], slot=slot)
+            self.open_window(f"clear; python3 {HERE}/watch_agent.py {self.root}/agents/{task['id']}")
             try:
                 res = self.run_task(task, slot)
                 if res["status"] == "passed":
@@ -350,6 +479,10 @@ class Night:
         while not stop.is_set():
             self.status["servers"] = {str(p): self.server_ok(p) for p in self.ports}
             self.write_status()
+            try:
+                improve.write_digest(self)
+            except Exception as e:
+                self.event("digest_error", error=repr(e)[:100])
             stop.wait(30)
 
     def report(self):
@@ -372,6 +505,7 @@ class Night:
         stop = threading.Event()
         threading.Thread(target=self.heartbeat, args=(stop,), daemon=True).start()
         self.event("night_start", tasks=list(self.tasks), agents=self.plan.get("agents", 3))
+        self.open_window(f"while true; do clear; python3 {HERE}/status.py {self.root}; sleep 20; done")
         threads = [threading.Thread(target=self.worker, args=(i,)) for i in range(self.plan.get("agents", 3))]
         for th in threads:
             th.start()
@@ -380,6 +514,7 @@ class Night:
             th.join()
         stop.set()
         self.report()
+        improve.write_digest(self)
         self.event("night_end", states=dict(self.state))
 
 
