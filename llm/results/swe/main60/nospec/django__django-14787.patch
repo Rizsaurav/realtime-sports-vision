@@ -1,0 +1,33 @@
+diff --git a/django/utils/decorators.py b/django/utils/decorators.py
+index 5c9a5d01c7..d156b584e8 100755
+--- a/django/utils/decorators.py
++++ b/django/utils/decorators.py
+@@ -19,6 +19,16 @@ def _update_method_wrapper(_wrapper, decorator):
+     update_wrapper(_wrapper, dummy)
+ 
+ 
++def _make_wrapper(func):
++    # Wrap a callable (e.g. a functools.partial) in a function so that
++    # decorators using functools.wraps() can copy attributes such as
++    # __name__ and __module__ from it.
++    @wraps(func)
++    def wrapper(*args, **kwargs):
++        return func(*args, **kwargs)
++    return wrapper
++
++
+ def _multi_decorate(decorators, method):
+     """
+     Decorate `method` with one or more function decorators. `decorators` can be
+@@ -39,7 +49,10 @@ def _multi_decorate(decorators, method):
+         # attributes can't be set on bound method objects, only on functions.
+         bound_method = partial(method.__get__(self, type(self)))
+         for dec in decorators:
+-            bound_method = dec(bound_method)
++            # Wrap the bound method in a function so that decorators that use
++            # functools.wraps() can copy attributes such as __name__ and
++            # __module__ from the original method.
++            bound_method = dec(_make_wrapper(bound_method))
+         return bound_method(*args, **kwargs)
+ 
+     # Copy any attributes that a decorator adds to the function it decorates.

@@ -1,0 +1,20 @@
+model:
+  model_name: hosted_vllm/qwen3.8-27b
+  cost_tracking: ignore_errors
+  model_kwargs:
+    api_base: http://127.0.0.1:8000/v1
+    api_key: EMPTY
+    temperature: 0.6
+    top_p: 0.95
+    max_tokens: 4096
+    timeout: 900
+    extra_body:
+      top_k: 20
+      chat_template_kwargs:
+        enable_thinking: false
+agent:
+  step_limit: 100
+  cost_limit: 0
+environment:
+  run_args: ["--rm", "--memory", "12g", "--memory-swap", "12g", "--cpus", "4",
+             "--pids-limit", "1024", "--network", "none", "--log-driver", "none"]

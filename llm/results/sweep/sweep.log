@@ -1,0 +1,36 @@
+=== 1_eager_nospec  eager=1 mtp=0 tokens=0  2026-10-16T04:05:45Z
+    617 tokens  ttft    144 ms    16.3 tok/s   'Find and fix the bug, then write a regression test'
+decode tok/s: mean 17.4  median 17.6  min 14.4  max 20.3   ttft median 144 ms
+pass rate 40/40 = 100.0%
+stopped 393154
+=== 2_graphs_nospec  eager=0 mtp=0 tokens=0  2026-10-16T04:26:49Z
+    600 tokens  ttft    155 ms    76.7 tok/s   'Find and fix the bug, then write a regression test'
+decode tok/s: mean 77.2  median 77.0  min 76.6  max 78.4   ttft median 157 ms
+pass rate 40/40 = 100.0%
+stopped 438816
+=== 3_graphs_mtp1  eager=0 mtp=1 tokens=1  2026-10-16T04:33:18Z
+decode tok/s: mean 130.7  median 131.6  min 126.0  max 134.9   ttft median 156 ms
+MTP acceptance: 4100/4456 draft tokens = 92.0%
+pass rate 40/40 = 100.0%
+stopped 446406
+=== 4_graphs_mtp2  eager=0 mtp=1 tokens=2  2026-10-16T04:38:17Z
+decode tok/s: mean 167.7  median 169.2  min 150.7  max 176.0   ttft median 121 ms
+MTP acceptance: 5296/6256 draft tokens = 84.7%
+pass rate 40/40 = 100.0%
+stopped 452579
+=== 5_graphs_mtp3  eager=0 mtp=1 tokens=3  2026-10-16T04:42:31Z
+decode tok/s: mean 200.5  median 204.7  min 172.8  max 216.7   ttft median 127 ms
+MTP acceptance: 6176/7710 draft tokens = 80.1%
+pass rate 40/40 = 100.0%
+stopped 457932
+=== 6_graphs_mtp4  eager=0 mtp=1 tokens=4  2026-10-16T04:45:54Z
+decode tok/s: mean 214.6  median 215.7  min 171.0  max 242.6   ttft median 124 ms
+MTP acceptance: 6994/9688 draft tokens = 72.2%
+pass rate 40/40 = 100.0%
+stopped 462496
+=== 7_graphs_mtp5  eager=0 mtp=1 tokens=5  2026-10-16T04:50:05Z
+decode tok/s: mean 219.8  median 220.7  min 170.0  max 263.5   ttft median 125 ms
+MTP acceptance: 6036/9330 draft tokens = 64.7%
+pass rate 40/40 = 100.0%
+stopped 467779
+=== sweep done 2026-10-16T04:53:56Z

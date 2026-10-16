@@ -1,0 +1,66 @@
+{
+ "pass": 40,
+ "n": 40,
+ "per_problem": {
+  "two_sum": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "is_balanced": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "merge_intervals": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "roman_to_int": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "lis_length": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "word_freq": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "flatten": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "topo_sort": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "min_window": [
+   true,
+   true,
+   true,
+   true
+  ],
+  "matrix_spiral": [
+   true,
+   true,
+   true,
+   true
+  ]
+ }
+}

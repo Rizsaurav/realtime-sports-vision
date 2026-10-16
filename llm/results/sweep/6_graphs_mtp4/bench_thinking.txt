@@ -1,0 +1,8 @@
+   2048 tokens  ttft    141 ms   172.1 tok/s   'Write a Python class LRUCache with get and put in '
+   2048 tokens  ttft    123 ms   140.6 tok/s   'Implement an asyncio rate limiter in Python that a'
+   2048 tokens  ttft    168 ms   174.4 tok/s   'Write a SQL query and a short explanation: for eac'
+    991 tokens  ttft    166 ms   181.0 tok/s   'Refactor this into clean, idiomatic Python and exp'
+   2048 tokens  ttft    162 ms   155.1 tok/s   'Write a TypeScript function debounce<T extends (..'
+   2048 tokens  ttft    166 ms   150.1 tok/s   'Find and fix the bug, then write a regression test'
+decode tok/s: mean 162.2  median 163.6  min 140.6  max 181.0   ttft median 164 ms
+MTP acceptance: 7440/15168 draft tokens = 49.1%

@@ -1,0 +1,14 @@
+    442 tokens  ttft    100 ms   236.2 tok/s   'Write a Python class LRUCache with get and put in '
+    971 tokens  ttft    124 ms   207.2 tok/s   'Implement an asyncio rate limiter in Python that a'
+    529 tokens  ttft    126 ms   215.2 tok/s   'Write a SQL query and a short explanation: for eac'
+    516 tokens  ttft    127 ms   170.0 tok/s   'Refactor this into clean, idiomatic Python and exp'
+    638 tokens  ttft    124 ms   241.2 tok/s   'Write a TypeScript function debounce<T extends (..'
+    529 tokens  ttft    168 ms   263.5 tok/s   'Find and fix the bug, then write a regression test'
+    432 tokens  ttft    125 ms   238.3 tok/s   'Write a Python class LRUCache with get and put in '
+   1024 tokens  ttft    125 ms   207.0 tok/s   'Implement an asyncio rate limiter in Python that a'
+    594 tokens  ttft    125 ms   198.3 tok/s   'Write a SQL query and a short explanation: for eac'
+    917 tokens  ttft    127 ms   198.8 tok/s   'Refactor this into clean, idiomatic Python and exp'
+    745 tokens  ttft    124 ms   235.4 tok/s   'Write a TypeScript function debounce<T extends (..'
+    539 tokens  ttft    163 ms   226.1 tok/s   'Find and fix the bug, then write a regression test'
+decode tok/s: mean 219.8  median 220.7  min 170.0  max 263.5   ttft median 125 ms
+MTP acceptance: 6036/9330 draft tokens = 64.7%

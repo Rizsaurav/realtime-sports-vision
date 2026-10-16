@@ -70,7 +70,7 @@ def swe_table(run):
     f = R / "swe" / run / "run.jsonl"
     if not f.exists():
         return ""
-    inst, pulled, start = {}, {}, None
+    inst, pulled, start, growth = {}, {}, None, []
     for line in f.read_text().splitlines():
         r = json.loads(line)
         if r["event"] == "instance":
@@ -79,6 +79,8 @@ def swe_table(run):
             pulled[r["iid"]] = r
         elif r["event"] == "start":
             start = r
+        elif r["event"] == "cleaned":
+            growth.append((r["image_growth_gb"], r["fs_growth_gb"]))
     arms = sorted(inst)
     rows = ["| Arm | Instances | Resolved | Rate (95% CI) | Mean agent time (s) | Mean model calls | Hit step limit | Draft acceptance |",
             "|---|---|---|---|---|---|---|---|"]
@@ -101,16 +103,47 @@ def swe_table(run):
         only_b = sum(1 for i in common if inst[b][i]["resolved"] and not inst[a][i]["resolved"])
         neither = len(common) - both - only_a - only_b
         out += (f"\n\nPaired on {len(common)} common instances: both {both}, only {a} {only_a}, only {b} {only_b}, "
-                f"neither {neither}.")
-    sizes = [p["size_gb"] for p in pulled.values()]
-    if sizes:
-        out += (f"\n\nImages: {len(sizes)} pulled, mean {sum(sizes) / len(sizes):.2f} GB (max {max(sizes):.2f} GB) "
-                f"as reported by Docker; every one was removed after its instance.")
+                f"neither {neither}. McNemar exact two-sided p = {mcnemar(only_a, only_b):.2f}.")
+    if pulled:
+        out += (f"\n\nDisk control: {len(pulled)} instance images pulled and each removed after its instance. "
+                f"Peak growth over the starting state while up to 3 instances ran at once: "
+                f"{max(g[0] for g in growth):.1f} GB of images, {max(g[1] for g in growth):.1f} GB on the filesystem. "
+                f"(Docker's per-image size from `docker image inspect` understates real use, so the totals above are "
+                f"the numbers to trust.)")
     return out
+
+
+def mcnemar(only_a, only_b):
+    n = only_a + only_b
+    if n == 0:
+        return 1.0
+    return min(1.0, 2 * sum(math.comb(n, k) for k in range(0, min(only_a, only_b) + 1)) / 2 ** n)
+
+
+def concurrency_table():
+    out = {}
+    for name in ("mtp3", "nospec"):
+        f = R / "concurrency" / f"{name}.txt"
+        if f.exists():
+            for line in f.read_text().splitlines():
+                m = re.match(r"\s*(\d+)\s+([0-9.]+)\s+([0-9.]+)\s+(\S+)", line)
+                if m:
+                    out.setdefault(int(m[1]), {})[name] = (float(m[2]), float(m[3]), m[4])
+    if not out:
+        return ""
+    rows = ["| Concurrent agents | MTP3 aggregate tok/s | MTP3 per stream | No speculation aggregate | No speculation per stream |",
+            "|---|---|---|---|---|"]
+    for n in sorted(out):
+        a, b = out[n].get("mtp3"), out[n].get("nospec")
+        rows.append(f"| {n} | {a[0]:.0f} | {a[1]:.0f} | {b[0]:.0f} | {b[1]:.0f} |" if a and b else f"| {n} | | | | |")
+    return "\n".join(rows)
 
 
 def main():
     parts = ["## Speed and coding check by configuration\n", speed_table() or "(no sweep results yet)"]
+    c = concurrency_table()
+    if c:
+        parts += ["\n\n## Throughput by number of concurrent agents\n", c]
     for run in sorted(p.name for p in (R / "swe").glob("*") if p.is_dir()) if (R / "swe").exists() else []:
         t = swe_table(run)
         if t:

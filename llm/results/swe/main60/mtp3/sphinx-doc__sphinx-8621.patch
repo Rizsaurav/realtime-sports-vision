@@ -1,0 +1,15 @@
+diff --git a/sphinx/builders/html/transforms.py b/sphinx/builders/html/transforms.py
+index c91da57e9..ba13d2dbd 100644
+--- a/sphinx/builders/html/transforms.py
++++ b/sphinx/builders/html/transforms.py
+@@ -46,6 +46,10 @@ class KeyboardTransform(SphinxPostTransform):
+             if len(parts) == 1:
+                 continue
+ 
++            # filter out empty strings (ex. if a separator is at the
++            # beginning or end of the text)
++            parts = [part for part in parts if part]
++
+             node.pop()
+             while parts:
+                 key = parts.pop(0)
