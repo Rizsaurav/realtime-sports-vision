@@ -1,0 +1,4 @@
+06:05:32 docker before: {'Images': '7.465GB', 'Containers': '61.44kB', 'Local Volumes': '0B', 'Build Cache': '6.684GB'}; image already present: False
+06:05:36 pulled python:3.12-slim: rc=0 docker after pull: {'Images': '7.641GB', 'Containers': '61.44kB', 'Local Volumes': '0B', 'Build Cache': '6.684GB'}
+06:09:08 expense_cli: exit 0 after 212s
+06:09:09 docker after cleanup: {'Images': '7.465GB', 'Containers': '61.44kB', 'Local Volumes': '0B', 'Build Cache': '6.684GB'}

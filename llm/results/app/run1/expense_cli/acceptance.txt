@@ -1,0 +1,28 @@
+........................                                                 [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../tests/test_hidden.py::test_add_prints_exact_line_and_lowercases_category
+PASSED ../tests/test_hidden.py::test_add_defaults_to_today
+PASSED ../tests/test_hidden.py::test_invalid_add_exits_2_and_stores_nothing[args0]
+PASSED ../tests/test_hidden.py::test_invalid_add_exits_2_and_stores_nothing[args1]
+PASSED ../tests/test_hidden.py::test_invalid_add_exits_2_and_stores_nothing[args2]
+PASSED ../tests/test_hidden.py::test_invalid_add_exits_2_and_stores_nothing[args3]
+PASSED ../tests/test_hidden.py::test_invalid_add_exits_2_and_stores_nothing[args4]
+PASSED ../tests/test_hidden.py::test_invalid_add_exits_2_and_stores_nothing[args5]
+PASSED ../tests/test_hidden.py::test_invalid_add_exits_2_and_stores_nothing[args6]
+PASSED ../tests/test_hidden.py::test_invalid_add_exits_2_and_stores_nothing[args7]
+PASSED ../tests/test_hidden.py::test_list_line_format_with_note
+PASSED ../tests/test_hidden.py::test_list_without_note_has_empty_last_field
+PASSED ../tests/test_hidden.py::test_list_orders_by_date_then_id
+PASSED ../tests/test_hidden.py::test_list_filters
+PASSED ../tests/test_hidden.py::test_delete_and_unknown_id
+PASSED ../tests/test_hidden.py::test_ids_are_not_reused_after_delete
+PASSED ../tests/test_hidden.py::test_import_counts_quotes_duplicates
+PASSED ../tests/test_hidden.py::test_report_sorting_and_total
+PASSED ../tests/test_hidden.py::test_report_uses_exact_decimals
+PASSED ../tests/test_hidden.py::test_report_for_empty_month
+PASSED ../tests/test_hidden.py::test_report_requires_month
+PASSED ../tests/test_hidden.py::test_no_or_unknown_command_exits_2[args0]
+PASSED ../tests/test_hidden.py::test_no_or_unknown_command_exits_2[args1]
+PASSED ../tests/test_hidden.py::test_amount_formatting_in_list
+24 passed in 2.47s

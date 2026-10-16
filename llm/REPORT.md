@@ -180,8 +180,63 @@ python llm/bench_decode.py --port 8000                # speed
 python llm/bench_concurrency.py --port 8000           # parallel agents
 GPU=1 PORT=8001 llm/sweep.sh                          # every configuration in section 3
 python llm/swe/run_swe.py --arms mtp3=8000 nospec=8001 --n 60 --seed 0 --workers 3 --cap-gb 15 --fs-cap-gb 20 --step-limit 100
+python llm/app/run_apps.py --port 8000 --out /data/saurav/results/app/run1   # section 10
 llm/collect_results.sh && python llm/make_report.py   # raw logs -> tables
 ```
 
 Raw logs are in `llm/results/` (benchmarks, per-instance JSONL, patches, run configs). Server logs, agent trajectories
 and container logs are kept on the GPU host.
+
+## 10. Can the model build a whole app by itself?
+
+The SWE-bench run in section 5 used settings the model card does not recommend and measures bug fixing inside
+existing repositories. The question a user actually asks is "can it build the app I describe?", so this section
+tests that, at the recommended settings: thinking on, temperature 1.0, top-p 0.95, top-k 20, a 128K context
+(`serve_qwen38.sh` defaults), MTP with 3 draft tokens, and a 150-step cap.
+
+**Harness.** The model runs as an autonomous agent (mini-swe-agent, bash tool only) inside a throwaway
+`python:3.12-slim` container limited to 8 GB of memory, 4 CPUs and 1,024 processes. It receives a client-style
+specification (`llm/app/specs/`), builds the app in `/workspace`, tests it itself, and submits. Afterwards a hidden
+acceptance suite it never saw (`llm/app/tests/`) is run against what it built in the same container. The three tasks:
+
+| Task | What was asked | Hidden tests |
+|---|---|---|
+| Notes API | REST API with SQLite persistence, validation, search with literal `%` and `_`, pagination, restart persistence | 36 |
+| Expense CLI | Command line tool with exact output formats, exact decimal money, CSV import with quoting and duplicates, monthly report | 24 |
+| Kanban board | JSON API plus a browser page with drag-and-drop between columns, persistence across restart | 18 |
+
+**Results (one attempt each, no human help).**
+
+| Task | Hidden tests passed | Agent time | Model messages | Exit |
+|---|---|---|---|---|
+| Notes API | 36 / 36 | 273 s | 46 | submitted on its own |
+| Expense CLI | 24 / 24 | 271 s | 37 | submitted on its own |
+| Kanban board | 18 / 18 | 543 s | 83 | submitted on its own |
+
+A 5-step smoke test of the harness is also kept (`results/app/smoke`): with the agent cut off after 5 steps, its
+expense tracker already passed all 24 hidden tests, which shows how easy these specifications are for this model.
+
+**What the tests do not show, found by reading the code and running the result.**
+
+- *Notes API.* Queries are parameterised, so it is safe against SQL injection. The list endpoint, however, loads every
+  note from the database and filters and paginates in Python. That is correct and sidesteps the `%`/`_` escaping
+  trap, but it does not scale to a large table; a reviewer would ask for a SQL `WHERE` clause.
+- *Kanban board.* One 649-line file using only the standard library, with the page embedded. It was run in an
+  isolated container and loaded in a real browser: the page renders cleanly (three columns, cards with titles and
+  descriptions, an add-card form per column), adding a card through the form works, a card dragged into another
+  column moves and keeps its position after a reload, and there were no JavaScript errors. The drag was triggered
+  with synthetic drag events, not a real mouse. The page offers no way to create columns or delete cards in the
+  interface, because the specification only asked for adding cards and dragging.
+
+**Reading the result.**
+
+- For a small, greenfield application with a precise specification, this setup delivered working software on the
+  first attempt in 4.5 to 9 minutes of agent time, with sound basics (validation, parameterised SQL, persistence).
+- The evidence does not cover vague requirements, large or existing codebases, long-lived design decisions, visual
+  polish, security review or deployment. The earlier SWE-bench result (27% at non-recommended settings, thinking off,
+  100 steps) is a floor for the harder bug-fixing case, not a fair estimate of the model at its best, and was not
+  repeated here with the recommended settings.
+- Three tasks, one attempt each and tests written by the author are a small sample. The tasks were also chosen to be
+  well specified; passing them says the model is reliable at this kind of work, not that it is a replacement for review.
+- Container accounting for this run: the `python:3.12-slim` image was pulled once (about 176 MB), containers were
+  removed by exact name, and Docker returned to exactly its starting state (7.465 GB, 4 images, 2 containers).

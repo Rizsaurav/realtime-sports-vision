@@ -1,0 +1,40 @@
+....................................                                     [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../tests/test_hidden.py::test_health
+PASSED ../tests/test_hidden.py::test_create_returns_201_and_note_fields
+PASSED ../tests/test_hidden.py::test_create_defaults
+PASSED ../tests/test_hidden.py::test_title_validation[payload0]
+PASSED ../tests/test_hidden.py::test_title_validation[payload1]
+PASSED ../tests/test_hidden.py::test_title_validation[payload2]
+PASSED ../tests/test_hidden.py::test_title_validation[payload3]
+PASSED ../tests/test_hidden.py::test_title_validation[payload4]
+PASSED ../tests/test_hidden.py::test_title_of_100_characters_is_accepted
+PASSED ../tests/test_hidden.py::test_body_and_tags_validation[payload0]
+PASSED ../tests/test_hidden.py::test_body_and_tags_validation[payload1]
+PASSED ../tests/test_hidden.py::test_body_and_tags_validation[payload2]
+PASSED ../tests/test_hidden.py::test_body_and_tags_validation[payload3]
+PASSED ../tests/test_hidden.py::test_invalid_json_body_is_400
+PASSED ../tests/test_hidden.py::test_get_note_and_404
+PASSED ../tests/test_hidden.py::test_list_is_ordered_by_id_and_total_counts_matches
+PASSED ../tests/test_hidden.py::test_pagination_limit_offset_and_total
+PASSED ../tests/test_hidden.py::test_limit_and_offset_validation[params0]
+PASSED ../tests/test_hidden.py::test_limit_and_offset_validation[params1]
+PASSED ../tests/test_hidden.py::test_limit_and_offset_validation[params2]
+PASSED ../tests/test_hidden.py::test_limit_and_offset_validation[params3]
+PASSED ../tests/test_hidden.py::test_limit_and_offset_validation[params4]
+PASSED ../tests/test_hidden.py::test_limit_100_is_allowed
+PASSED ../tests/test_hidden.py::test_search_is_case_insensitive_over_title_and_body
+PASSED ../tests/test_hidden.py::test_percent_in_search_matches_literally
+PASSED ../tests/test_hidden.py::test_underscore_in_search_matches_literally
+PASSED ../tests/test_hidden.py::test_quotes_in_search_are_safe
+PASSED ../tests/test_hidden.py::test_tag_filter_is_exact
+PASSED ../tests/test_hidden.py::test_q_and_tag_combine_with_and
+PASSED ../tests/test_hidden.py::test_put_replaces_and_keeps_id_and_created_at
+PASSED ../tests/test_hidden.py::test_put_errors
+PASSED ../tests/test_hidden.py::test_put_defaults_for_missing_optional_fields
+PASSED ../tests/test_hidden.py::test_delete_returns_204_then_404
+PASSED ../tests/test_hidden.py::test_unicode_round_trip
+PASSED ../tests/test_hidden.py::test_responses_are_json
+PASSED ../tests/test_hidden.py::test_notes_survive_a_restart
+36 passed in 1.22s

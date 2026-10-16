@@ -1,0 +1,78 @@
+{
+ "statuses": {
+  "notes_api": "exit 0",
+  "expense_cli": "exit 0",
+  "kanban_board": "exit 0"
+ },
+ "removed_containers": [
+  "minisweagent-f61cbe4f"
+ ],
+ "docker_before": {
+  "Images": "7.465GB",
+  "Containers": "61.44kB",
+  "Local Volumes": "0B",
+  "Build Cache": "6.684GB"
+ },
+ "docker_after": {
+  "Images": "7.465GB",
+  "Containers": "61.44kB",
+  "Local Volumes": "0B",
+  "Build Cache": "6.684GB"
+ },
+ "results": {
+  "notes_api": {
+   "task": "notes_api",
+   "exit_status": "Submitted",
+   "agent_seconds": 273.4,
+   "messages": 46,
+   "settings": {
+    "temperature": 1.0,
+    "thinking": true,
+    "step_limit": 150
+   },
+   "acceptance": {
+    "passed": 36,
+    "failed": 0,
+    "errors": 0,
+    "total": 36,
+    "failed_tests": []
+   }
+  },
+  "expense_cli": {
+   "task": "expense_cli",
+   "exit_status": "Submitted",
+   "agent_seconds": 270.8,
+   "messages": 37,
+   "settings": {
+    "temperature": 1.0,
+    "thinking": true,
+    "step_limit": 150
+   },
+   "acceptance": {
+    "passed": 24,
+    "failed": 0,
+    "errors": 0,
+    "total": 24,
+    "failed_tests": []
+   }
+  },
+  "kanban_board": {
+   "task": "kanban_board",
+   "exit_status": "Submitted",
+   "agent_seconds": 542.5,
+   "messages": 83,
+   "settings": {
+    "temperature": 1.0,
+    "thinking": true,
+    "step_limit": 150
+   },
+   "acceptance": {
+    "passed": 18,
+    "failed": 0,
+    "errors": 0,
+    "total": 18,
+    "failed_tests": []
+   }
+  }
+ }
+}

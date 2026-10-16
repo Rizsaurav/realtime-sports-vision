@@ -1,0 +1,18 @@
+{
+ "task": "expense_cli",
+ "exit_status": "LimitsExceeded",
+ "agent_seconds": 200.0,
+ "messages": 15,
+ "settings": {
+  "temperature": 1.0,
+  "thinking": true,
+  "step_limit": 5
+ },
+ "acceptance": {
+  "passed": 24,
+  "failed": 0,
+  "errors": 0,
+  "total": 24,
+  "failed_tests": []
+ }
+}
