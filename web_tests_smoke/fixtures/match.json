@@ -1,0 +1,15 @@
+{
+  "id": "m_015003f514",
+  "name": "Sample match",
+  "created_at": "2026-01-01T00:00:00Z",
+  "frame_count": 750,
+  "first_frame": 0,
+  "last_frame": 749,
+  "duration_s": 30.0,
+  "delay": 125,
+  "colors": {
+    "right": "#93554e",
+    "left": "#aeafb1"
+  },
+  "size_bytes": 1125248
+}
