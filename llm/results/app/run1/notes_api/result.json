@@ -1,0 +1,18 @@
+{
+ "task": "notes_api",
+ "exit_status": "Submitted",
+ "agent_seconds": 273.4,
+ "messages": 46,
+ "settings": {
+  "temperature": 1.0,
+  "thinking": true,
+  "step_limit": 150
+ },
+ "acceptance": {
+  "passed": 36,
+  "failed": 0,
+  "errors": 0,
+  "total": 36,
+  "failed_tests": []
+ }
+}

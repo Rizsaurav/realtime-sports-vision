@@ -1,0 +1,2319 @@
+{
+ "name": "production-wave-10",
+ "base_repo": "/Users/saurav/Desktop/files/sideline-agents/base",
+ "base_branch": "webapp-base",
+ "root": "/Users/saurav/Desktop/files/sideline-agents/runs/night1",
+ "tools_dir": "/Users/saurav/Desktop/files/sideline-agents/tools",
+ "servers": [
+  8000,
+  8001
+ ],
+ "ssh_host": "scc",
+ "agents": 5,
+ "deadline_hours": 10,
+ "context_window": 262144,
+ "max_tokens": 98304,
+ "thinking": [
+  "medium",
+  "high",
+  "high",
+  "high",
+  "high"
+ ],
+ "improve": true,
+ "context_kit": true,
+ "visible": true,
+ "python_packages": [
+  "pytest",
+  "fastapi",
+  "httpx",
+  "python-multipart",
+  "uvicorn",
+  "coverage"
+ ],
+ "protected": [
+  "tests",
+  "web_tests",
+  "tasks",
+  "docs/WEBAPP_CONTRACT.md",
+  "package.json"
+ ],
+ "context_paths": [
+  "src",
+  "tests",
+  "web_tests",
+  "tasks",
+  "docs"
+ ],
+ "tasks": [
+  {
+   "id": "analytics",
+   "title": "analytics engine",
+   "spec": "tasks/analytics.md",
+   "files": [
+    "src/sideline/analytics.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_analytics.py -q"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "already_merged": true
+  },
+  {
+   "id": "replay_lib",
+   "title": "replay library",
+   "spec": "tasks/replay_lib.md",
+   "files": [
+    "src/sideline/web/lib/replay.js"
+   ],
+   "acceptance": [
+    "node --test web_tests/replay.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "already_merged": true
+  },
+  {
+   "id": "ui_pages",
+   "title": "library and statistics pages",
+   "spec": "tasks/ui_pages.md",
+   "files": [
+    "src/sideline/web/lib/render.js",
+    "src/sideline/web/library.html",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/render.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "already_merged": true
+  },
+  {
+   "id": "pitch_replay",
+   "title": "pitch drawing and replay view",
+   "spec": "tasks/replay_view.md",
+   "files": [
+    "src/sideline/web/lib/pitch.js"
+   ],
+   "acceptance": [
+    "node --test web_tests/pitch.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "already_merged": true
+  },
+  {
+   "id": "matches_api",
+   "title": "match library API",
+   "spec": "tasks/matches_api.md",
+   "files": [
+    "src/sideline/matches.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_matches_api.py -q"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "owns": [
+    "src/sideline/matches.py"
+   ],
+   "improve": true,
+   "min_coverage": 85,
+   "review_rounds": 3,
+   "expectations": [
+    "Match ids are validated by one function before any file access, so path traversal is impossible",
+    "Writes to the store are atomic (write to a temporary file, then rename); a crash cannot leave a half-written match",
+    "The router contains no business logic; MatchStore holds it",
+    "All error responses go through one helper that returns the error body and the right status",
+    "The analytics module is imported lazily and its result is cached on disk",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "library_server",
+   "title": "match library application",
+   "spec": "tasks/library_server.md",
+   "files": [
+    "src/sideline/library.py",
+    "src/sideline/__main__.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_library_app.py -q"
+   ],
+   "depends_on": [
+    "analytics",
+    "matches_api",
+    "replay_lib",
+    "ui_pages"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "owns": [
+    "src/sideline/library.py",
+    "src/sideline/__main__.py",
+    "README.md"
+   ],
+   "improve": true,
+   "expectations": [
+    "Importing the library app never imports torch, cv2, numpy or the live pipeline",
+    "The README section describes only behaviour that exists in the code",
+    "The existing serve and run commands behave exactly as before",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_analytics",
+   "title": "review and harden the analytics engine",
+   "spec": "tasks/analytics.md",
+   "files": [
+    "src/sideline/analytics.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_analytics.py -q"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "min_coverage": 90,
+   "review_rounds": 3,
+   "expectations": [
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job",
+    "No logic is duplicated between functions; shared steps live in one helper",
+    "Errors are explicit: bad input raises a clear error or returns a clear failure, nothing is silently swallowed",
+    "Speed and distance step logic lives in one place and is used by players and by the ball",
+    "A recording of 100,000 frames with 22 people is summarised in under 15 seconds (measure it)",
+    "Input frames are never modified and there is no global state"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_replay",
+   "title": "review and harden the replay library",
+   "spec": "tasks/replay_lib.md",
+   "files": [
+    "src/sideline/web/lib/replay.js"
+   ],
+   "acceptance": [
+    "node --test web_tests/replay.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "All functions are pure and never modify their inputs",
+    "The Timeline depends on the clock only through the injected clock",
+    "Every edge case in the task text (empty list, single frame, duplicates, seek past the end) has a code path and a comment",
+    "No logic is duplicated between functions; shared steps live in one helper",
+    "Errors are explicit: bad input raises a clear error or returns a clear failure, nothing is silently swallowed"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_ui",
+   "title": "review and harden the pages and render library",
+   "spec": "tasks/ui_pages.md",
+   "files": [
+    "src/sideline/web/lib/render.js",
+    "src/sideline/web/library.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/render.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Every piece of data shown goes through textContent or an equivalent, never innerHTML, so recorded names cannot inject markup",
+    "Both pages are usable at 400 px width and have readable colours in light and dark colour schemes",
+    "Buttons are real buttons, tables have header scopes, links have text",
+    "A failed or empty API response shows a clear message, not a blank page or a console error",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_pitch",
+   "title": "review and harden the pitch and replay view",
+   "spec": "tasks/replay_view.md",
+   "files": [
+    "src/sideline/web/lib/pitch.js",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/pitch.test.mjs"
+   ],
+   "depends_on": [
+    "improve_ui"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Pure functions never touch the DOM or the canvas",
+    "The replay panel loads frames in chunks, keeps a bounded cache and prefetches before the end of a chunk",
+    "Space toggles play and pause only when no input has focus",
+    "The animation loop stops when the page is hidden",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "integration_tests",
+   "title": "end-to-end tests for the match library app",
+   "spec": "tasks/integration_tests.md",
+   "files": [
+    "tests_integration/test_app_end_to_end.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests_integration -q"
+   ],
+   "depends_on": [],
+   "owns": [
+    "tests_integration/"
+   ],
+   "improve": true,
+   "expectations": [
+    "Every test has a one-line docstring naming the failure it catches",
+    "The sample recording is loaded once per module, not once per test",
+    "No test depends on another test's data",
+    "The page-to-API checks read the real page files, not copies"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "review_rounds": 3,
+   "harden": true,
+   "already_merged": true
+  },
+  {
+   "id": "improve_library",
+   "title": "second review pass: match library application",
+   "spec": "tasks/library_server.md",
+   "files": [
+    "src/sideline/library.py",
+    "src/sideline/__main__.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "integration_tests"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "improve": true,
+   "expectations": [
+    "Importing the library app never imports torch, cv2, numpy or the live pipeline",
+    "The README section describes only behaviour that exists in the code",
+    "The existing serve and run commands behave exactly as before",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "type": "improve",
+   "review_rounds": 3,
+   "harden": true,
+   "min_coverage": 85,
+   "already_merged": true
+  },
+  {
+   "id": "improve_ui_2",
+   "title": "second review pass: review and harden the pages and render library",
+   "spec": "tasks/ui_pages.md",
+   "files": [
+    "src/sideline/web/lib/render.js",
+    "src/sideline/web/library.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/render.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Every piece of data shown goes through textContent or an equivalent, never innerHTML, so recorded names cannot inject markup",
+    "Both pages are usable at 400 px width and have readable colours in light and dark colour schemes",
+    "Buttons are real buttons, tables have header scopes, links have text",
+    "A failed or empty API response shows a clear message, not a blank page or a console error",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_pitch_2",
+   "title": "second review pass: review and harden the pitch and replay view",
+   "spec": "tasks/replay_view.md",
+   "files": [
+    "src/sideline/web/lib/pitch.js",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/pitch.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Pure functions never touch the DOM or the canvas",
+    "The replay panel loads frames in chunks, keeps a bounded cache and prefetches before the end of a chunk",
+    "Space toggles play and pause only when no input has focus",
+    "The animation loop stops when the page is hidden",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "page_smoke",
+   "title": "page smoke tests against the real API",
+   "spec": "tasks/page_smoke.md",
+   "files": [
+    "web_tests_smoke/pages.test.mjs",
+    "tests_integration/make_fixtures.py"
+   ],
+   "acceptance": [
+    "python tests_integration/make_fixtures.py && node --test web_tests_smoke/pages.test.mjs"
+   ],
+   "depends_on": [],
+   "owns": [
+    "web_tests_smoke/",
+    "tests_integration/make_fixtures.py"
+   ],
+   "improve": true,
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "review_rounds": 3,
+   "harden": false,
+   "expectations": [
+    "Each test asserts what a user would see, not internal variables",
+    "Fixtures are generated from the real API, never hand-written",
+    "A page that renders blank or throws an error makes a test fail with a clear message"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "speed_quality",
+   "title": "trustworthy speed figures",
+   "spec": "tasks/speed_quality.md",
+   "files": [
+    "src/sideline/analytics.py",
+    "src/sideline/matches.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_extra tests_integration -q"
+   ],
+   "owns": [
+    "src/sideline/analytics.py",
+    "src/sideline/matches.py",
+    "src/sideline/library.py",
+    "tests_integration/",
+    "tasks/analytics.md"
+   ],
+   "improve": true,
+   "expectations": [
+    "The smoothing rule is implemented in one function and documented",
+    "With smoothing off nothing changes",
+    "The app switches smoothing on in one place"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 75,
+   "review_rounds": 3,
+   "harden": false,
+   "already_merged": true
+  },
+  {
+   "id": "improve_ui_3",
+   "title": "third review pass: review and harden the pages and render library",
+   "spec": "tasks/ui_pages.md",
+   "files": [
+    "src/sideline/web/lib/render.js",
+    "src/sideline/web/library.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/render.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 75,
+   "type": "improve",
+   "harden": false,
+   "review_rounds": 3,
+   "expectations": [
+    "Every piece of data shown goes through textContent or an equivalent, never innerHTML, so recorded names cannot inject markup",
+    "Both pages are usable at 400 px width and have readable colours in light and dark colour schemes",
+    "Buttons are real buttons, tables have header scopes, links have text",
+    "A failed or empty API response shows a clear message, not a blank page or a console error",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_pitch_3",
+   "title": "third review pass: review and harden the pitch and replay view",
+   "spec": "tasks/replay_view.md",
+   "files": [
+    "src/sideline/web/lib/pitch.js",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/pitch.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 75,
+   "type": "improve",
+   "harden": false,
+   "review_rounds": 3,
+   "expectations": [
+    "Pure functions never touch the DOM or the canvas",
+    "The replay panel loads frames in chunks, keeps a bounded cache and prefetches before the end of a chunk",
+    "Space toggles play and pause only when no input has focus",
+    "The animation loop stops when the page is hidden",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_smoke",
+   "title": "review the page smoke tests",
+   "spec": "tasks/page_smoke.md",
+   "files": [
+    "web_tests_smoke/pages.test.mjs",
+    "tests_integration/make_fixtures.py"
+   ],
+   "acceptance": [
+    "python tests_integration/make_fixtures.py && node --test web_tests_smoke/pages.test.mjs"
+   ],
+   "type": "improve",
+   "depends_on": [],
+   "expectations": [
+    "Each test asserts what a user would see",
+    "Fixtures come from the real API",
+    "A blank or erroring page fails a test with a clear message"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 75,
+   "review_rounds": 3,
+   "harden": false,
+   "already_merged": true
+  },
+  {
+   "id": "upload_clarity",
+   "title": "clear uploads",
+   "spec": "tasks/upload_clarity.md",
+   "files": [
+    "src/sideline/web/library.html",
+    "src/sideline/library.py",
+    "src/sideline/__main__.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_library_app.py tests_integration -q",
+    "python tests_integration/make_fixtures.py && node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "owns": [
+    "src/sideline/web/library.html",
+    "src/sideline/web/lib/render.js",
+    "src/sideline/library.py",
+    "src/sideline/__main__.py",
+    "README.md",
+    "tests_integration/",
+    "web_tests_smoke/"
+   ],
+   "improve": true,
+   "max_attempts": 5,
+   "timeout_min": 60,
+   "review_rounds": 2,
+   "harden": false,
+   "expectations": [
+    "No text on the page says that videos are accepted",
+    "Every error shown to the user states what is wrong and what to do",
+    "The limit shown to the user comes from the server, not a copy in the page"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "video_worker",
+   "title": "video worker service",
+   "spec": "tasks/video_worker.md",
+   "files": [
+    "src/sideline/worker.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_worker.py -q"
+   ],
+   "depends_on": [],
+   "owns": [
+    "src/sideline/worker.py",
+    "src/sideline/__main__.py",
+    "tests/test_worker.py"
+   ],
+   "expectations": [
+    "The uploaded file's own name never appears in a path or a command",
+    "Uploads are streamed in chunks, never held fully in memory",
+    "Every state change of a job is written atomically",
+    "The default runner uses no shell"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "review_rounds": 2,
+   "harden": true,
+   "improve": true,
+   "already_merged": true
+  },
+  {
+   "id": "video_client",
+   "title": "video upload in the library app",
+   "spec": "tasks/video_client.md",
+   "files": [
+    "src/sideline/videos.py",
+    "src/sideline/library.py",
+    "src/sideline/web/library.html"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_library_app.py tests_integration -q",
+    "python tests_integration/make_fixtures.py && node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "depends_on": [
+    "upload_clarity",
+    "video_worker"
+   ],
+   "owns": [
+    "src/sideline/videos.py",
+    "src/sideline/library.py",
+    "src/sideline/web/library.html",
+    "src/sideline/__main__.py",
+    "README.md",
+    "tests_integration/",
+    "web_tests_smoke/"
+   ],
+   "expectations": [
+    "A video is never read fully into memory",
+    "The job to match mapping survives a restart",
+    "Errors shown to the user say what is wrong and what to do"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "review_rounds": 2,
+   "harden": true,
+   "improve": true,
+   "already_merged": true
+  },
+  {
+   "id": "visual_stability",
+   "title": "calm replay",
+   "spec": "tasks/visual_stability.md",
+   "files": [
+    "src/sideline/web/lib/replay.js",
+    "src/sideline/web/lib/pitch.js",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/*.test.mjs web_tests_visual/visual.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "owns": [
+    "src/sideline/web/lib/replay.js",
+    "src/sideline/web/lib/pitch.js",
+    "src/sideline/web/match.html",
+    "web_tests_visual/"
+   ],
+   "improve": true,
+   "max_attempts": 6,
+   "timeout_min": 75,
+   "review_rounds": 2,
+   "harden": false,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "expectations": [
+    "The glitch rejection is one function with its rules written in comments",
+    "Processing happens once per loaded chunk, not per drawn frame",
+    "With the checkbox off the page draws the raw data"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "calibration_guard",
+   "title": "calibration guard",
+   "spec": "tasks/calibration_guard.md",
+   "files": [
+    "src/sideline/calibration_guard.py",
+    "src/sideline/pipeline.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_calibration_guard.py -q",
+    "python -m pytest tests/test_decisions.py tests/test_sources.py -q"
+   ],
+   "owns": [
+    "src/sideline/calibration_guard.py",
+    "src/sideline/pipeline.py",
+    "tests/test_calibration_guard.py"
+   ],
+   "min_coverage": 90,
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Every threshold is a named constant or parameter",
+    "The guard is pure apart from CalibrationGuard",
+    "A rejected calibration never leaves the pipeline without any calibration once it had one"
+   ],
+   "max_attempts": 6,
+   "timeout_min": 90,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "service_hardening",
+   "title": "service hardening",
+   "spec": "tasks/service_hardening.md",
+   "files": [
+    "src/sideline/worker.py",
+    "src/sideline/library.py",
+    "src/sideline/videos.py",
+    "src/sideline/__main__.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests/test_worker.py tests/test_hardening.py tests_extra tests_integration -q"
+   ],
+   "owns": [
+    "src/sideline/worker.py",
+    "src/sideline/library.py",
+    "src/sideline/videos.py",
+    "src/sideline/__main__.py",
+    "src/sideline/web/",
+    "tests/test_hardening.py",
+    "web_tests_smoke/"
+   ],
+   "min_coverage": 85,
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Tokens are compared in constant time and never logged",
+    "Every limit has a documented default and a test",
+    "Logging and metrics code is shared by the two services"
+   ],
+   "max_attempts": 6,
+   "timeout_min": 90,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "feature_registry",
+   "title": "backend plug-in registry",
+   "spec": "tasks/feature_registry.md",
+   "files": [
+    "src/sideline/features/__init__.py",
+    "src/sideline/features/_common.py",
+    "src/sideline/library.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_feature_registry.py -q",
+    "python -m pytest tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "service_hardening"
+   ],
+   "owns": [
+    "src/sideline/features/",
+    "src/sideline/library.py",
+    "tests/test_feature_registry.py"
+   ],
+   "min_coverage": 90,
+   "expectations": [
+    "A broken feature never prevents the app from starting",
+    "The cache is invalidated on delete and replace",
+    "Helpers in _common.py are pure"
+   ],
+   "max_attempts": 6,
+   "timeout_min": 90,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "ui_shell",
+   "title": "design system and tabbed match page",
+   "spec": "tasks/ui_shell.md",
+   "files": [
+    "src/sideline/web/ui/theme.css",
+    "src/sideline/web/ui/components.js",
+    "src/sideline/web/ui/shell.js",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests_ui/shell.test.mjs",
+    "python -m pytest tests/test_ui_shell.py tests_integration -q",
+    "node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "depends_on": [
+    "service_hardening"
+   ],
+   "owns": [
+    "src/sideline/web/",
+    "src/sideline/library.py",
+    "tests/test_ui_shell.py",
+    "web_tests_ui/",
+    "web_tests_smoke/"
+   ],
+   "harden": true,
+   "review_rounds": 3,
+   "timeout_min": 120,
+   "expectations": [
+    "No page uses inline scripts or inline event handlers",
+    "Every interactive element is keyboard reachable and has an accessible name",
+    "No data is ever inserted with innerHTML",
+    "Both themes meet readable contrast"
+   ],
+   "max_attempts": 6,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "possession_spec",
+   "title": "spec and tests: possession",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Estimate which team has the ball at each moment (nearest team player to the ball within 3 m, held at least 0.5 s) and return the possession timeline, percentages per team and per 5-minute window. Route GET /api/matches/{id}/possession. Module src/sideline/features/possession.py.",
+   "files": [
+    "features/possession/spec.md",
+    "features/possession/tests/test_possession.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/possession"
+   ],
+   "owns": [
+    "features/possession/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "possession",
+   "title": "feature: possession",
+   "spec": "features/possession/spec.md",
+   "files": [
+    "src/sideline/features/possession.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/possession/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "possession_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/possession.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "formation_spec",
+   "title": "spec and tests: formation",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Detect each team's shape (for example 4-4-2) from outfield positions per 60-second window by splitting players into lines along the team's attacking axis; return per-window formation strings, a confidence, and the average position per role slot. Route GET /api/matches/{id}/formation. Module src/sideline/features/formation.py.",
+   "files": [
+    "features/formation/spec.md",
+    "features/formation/tests/test_formation.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/formation"
+   ],
+   "owns": [
+    "features/formation/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "formation",
+   "title": "feature: formation",
+   "spec": "features/formation/spec.md",
+   "files": [
+    "src/sideline/features/formation.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/formation/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "formation_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/formation.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "pitch_control_spec",
+   "title": "spec and tests: pitch_control",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Grid-based pitch control: for each cell of a 21x14 grid which team reaches it first at 5 m/s, per second and averaged over the match; return share per team, a territory time series and the average control map. Route GET /api/matches/{id}/pitch-control?start&end. Module src/sideline/features/pitch_control.py.",
+   "files": [
+    "features/pitch_control/spec.md",
+    "features/pitch_control/tests/test_pitch_control.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/pitch_control"
+   ],
+   "owns": [
+    "features/pitch_control/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "pitch_control",
+   "title": "feature: pitch_control",
+   "spec": "features/pitch_control/spec.md",
+   "files": [
+    "src/sideline/features/pitch_control.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/pitch_control/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "pitch_control_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/pitch_control.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "events_spec",
+   "title": "spec and tests: events",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Detect and list events: sprints, ball speed peaks above 15 m/s, possession changes, long balls (ball moves over 25 m within 2 s); return a sorted timeline with frame, time, type, team and player id when known. Route GET /api/matches/{id}/events. Module src/sideline/features/events.py.",
+   "files": [
+    "features/events/spec.md",
+    "features/events/tests/test_events.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/events"
+   ],
+   "owns": [
+    "features/events/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "events",
+   "title": "feature: events",
+   "spec": "features/events/spec.md",
+   "files": [
+    "src/sideline/features/events.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/events/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "events_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/events.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "team_shape_spec",
+   "title": "spec and tests: team_shape",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Per-second time series per team: centroid, width, length, convex hull area, defensive line height (mean x of the deepest 4 outfield players relative to their own goal) and compactness, plus match averages. Route GET /api/matches/{id}/team-shape. Module src/sideline/features/team_shape.py.",
+   "files": [
+    "features/team_shape/spec.md",
+    "features/team_shape/tests/test_team_shape.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/team_shape"
+   ],
+   "owns": [
+    "features/team_shape/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "team_shape",
+   "title": "feature: team_shape",
+   "spec": "features/team_shape/spec.md",
+   "files": [
+    "src/sideline/features/team_shape.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/team_shape/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "team_shape_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/team_shape.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "intensity_spec",
+   "title": "spec and tests: intensity",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Per-player and per-team distance in speed zones (walk under 2, jog 2-4, run 4-6, high-speed 6-7, sprint over 7 m/s) per minute and in total, work-rate in m/min and top-10 lists; same step rules as analytics (steps over 12 m/s are discarded). Route GET /api/matches/{id}/intensity. Module src/sideline/features/intensity.py.",
+   "files": [
+    "features/intensity/spec.md",
+    "features/intensity/tests/test_intensity.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/intensity"
+   ],
+   "owns": [
+    "features/intensity/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "intensity",
+   "title": "feature: intensity",
+   "spec": "features/intensity/spec.md",
+   "files": [
+    "src/sideline/features/intensity.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/intensity/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "intensity_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/intensity.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "data_quality_spec",
+   "title": "spec and tests: data_quality",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Quality report for a recording: share of frames with at least 8 tracked people, frame ranges with no people (uncalibrated), average tracked per frame, estimated fragment tracks (a track starting within 1.5 s and 3 m of another that ended), teams assigned %, jerseys read %, ball found %, plain-language warnings and an overall grade A to D. Route GET /api/matches/{id}/quality. Module src/sideline/features/data_quality.py.",
+   "files": [
+    "features/data_quality/spec.md",
+    "features/data_quality/tests/test_data_quality.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/data_quality"
+   ],
+   "owns": [
+    "features/data_quality/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "data_quality",
+   "title": "feature: data_quality",
+   "spec": "features/data_quality/spec.md",
+   "files": [
+    "src/sideline/features/data_quality.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/data_quality/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "data_quality_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/data_quality.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "annotations_spec",
+   "title": "spec and tests: annotations",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Editable metadata stored with the match: rename the match, name the teams, name players by track id (and merge several track ids into one named player), free notes, tags and a favourite flag; CRUD under /api/matches/{id}/annotations, atomic persistence, validation of lengths and characters, and a function resolve_player_id other features can import. Module src/sideline/features/annotations.py.",
+   "files": [
+    "features/annotations/spec.md",
+    "features/annotations/tests/test_annotations.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/annotations"
+   ],
+   "owns": [
+    "features/annotations/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "annotations",
+   "title": "feature: annotations",
+   "spec": "features/annotations/spec.md",
+   "files": [
+    "src/sideline/features/annotations.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/annotations/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "annotations_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/annotations.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "compare_spec",
+   "title": "spec and tests: compare",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Compare two matches' headline numbers side by side (duration, tracked people, team width and length, average distance per player, ball found %): app-level route GET /api/compare?a=&b= using register_app; 404 for unknown ids, 400 when a equals b. Module src/sideline/features/compare.py.",
+   "files": [
+    "features/compare/spec.md",
+    "features/compare/tests/test_compare.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/compare"
+   ],
+   "owns": [
+    "features/compare/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "compare",
+   "title": "feature: compare",
+   "spec": "features/compare/spec.md",
+   "files": [
+    "src/sideline/features/compare.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/compare/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "compare_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/compare.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "report_spec",
+   "title": "spec and tests: report",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Printable single-page HTML report at GET /api/matches/{id}/report.html: header, headline numbers, team shape, top players, heatmaps as inline SVG, and sections from other features when their routes exist (possession, formation, events, quality), working with any subset; no external resources; A4 print CSS. Module src/sideline/features/report.py.",
+   "files": [
+    "features/report/spec.md",
+    "features/report/tests/test_report.py"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/report"
+   ],
+   "owns": [
+    "features/report/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Every test asserts exact numbers derived from the spec, not only types or status codes",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ],
+   "depends_on": []
+  },
+  {
+   "id": "report",
+   "title": "feature: report",
+   "spec": "features/report/spec.md",
+   "files": [
+    "src/sideline/features/report.py"
+   ],
+   "acceptance": [
+    "python -m pytest features/report/tests -q",
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "report_spec",
+    "feature_registry"
+   ],
+   "owns": [
+    "src/sideline/features/report.py"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "min_coverage": 85,
+   "timeout_min": 90,
+   "expectations": [
+    "Every rule in the spec is implemented as stated",
+    "No test, spec or shared file was modified",
+    "Large recordings are processed within the stated performance budget",
+    "Pure functions are separated from the route handlers"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "charts_spec",
+   "title": "spec and tests: charts",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "SVG chart library at src/sideline/web/ui/charts.js (not a tab): line, area, bar, stacked bar, sparkline and heat-grid charts with axes, legends, tooltips, responsive viewBox, theme tokens, accessible titles and descriptions, and graceful empty and single-point data. Exports createLineChart, createBarChart, createStackedBar, createAreaChart, sparkline, heatGrid; each returns an SVG element and takes (container, data, options).",
+   "files": [
+    "features/charts/spec.md",
+    "features/charts/tests/charts.test.mjs"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/charts"
+   ],
+   "owns": [
+    "features/charts/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "depends_on": [
+    "ui_shell"
+   ],
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Tests drive the real DOM in jsdom and assert what a user would see",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "charts",
+   "title": "interface: charts",
+   "spec": "features/charts/spec.md",
+   "files": [
+    "src/sideline/web/ui/charts.js"
+   ],
+   "acceptance": [
+    "node --test features/charts/tests/*.test.mjs",
+    "node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "depends_on": [
+    "charts_spec",
+    "ui_shell"
+   ],
+   "owns": [
+    "src/sideline/web/ui/charts.js"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "timeout_min": 100,
+   "expectations": [
+    "No data is inserted with innerHTML",
+    "Every interactive element is keyboard reachable and named",
+    "A missing endpoint hides its section instead of breaking the page",
+    "The module has no global state outside its render function"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "overview_spec",
+   "title": "spec and tests: overview",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Overview tab (order 10): headline cards, possession bar (when the possession route exists), team cards, quality grade badge with warnings (when the quality route exists), key events list where clicking seeks the replay, using the charts library. Module src/sideline/web/features/overview.js.",
+   "files": [
+    "features/overview/spec.md",
+    "features/overview/tests/overview.test.mjs"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/overview"
+   ],
+   "owns": [
+    "features/overview/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "depends_on": [
+    "ui_shell"
+   ],
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Tests drive the real DOM in jsdom and assert what a user would see",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "overview",
+   "title": "interface: overview",
+   "spec": "features/overview/spec.md",
+   "files": [
+    "src/sideline/web/features/overview.js"
+   ],
+   "acceptance": [
+    "node --test features/overview/tests/*.test.mjs",
+    "node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "depends_on": [
+    "overview_spec",
+    "ui_shell",
+    "charts"
+   ],
+   "owns": [
+    "src/sideline/web/features/overview.js"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "timeout_min": 100,
+   "expectations": [
+    "No data is inserted with innerHTML",
+    "Every interactive element is keyboard reachable and named",
+    "A missing endpoint hides its section instead of breaking the page",
+    "The module has no global state outside its render function"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "replay_spec",
+   "title": "spec and tests: replay",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Replay tab (order 20): canvas replay with player focus (click a dot), fading trails toggle, event markers on the timeline, frame stepping, A-B loop, speed menu, fullscreen, keyboard shortcuts with a help overlay, team-colour theming, ball trail and a defensive-line overlay toggle; reuses pitch.js and replay.js and the smoothing already present. Module src/sideline/web/features/replay.js.",
+   "files": [
+    "features/replay/spec.md",
+    "features/replay/tests/replay.test.mjs"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/replay"
+   ],
+   "owns": [
+    "features/replay/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "depends_on": [
+    "ui_shell"
+   ],
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Tests drive the real DOM in jsdom and assert what a user would see",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "replay",
+   "title": "interface: replay",
+   "spec": "features/replay/spec.md",
+   "files": [
+    "src/sideline/web/features/replay.js"
+   ],
+   "acceptance": [
+    "node --test features/replay/tests/*.test.mjs",
+    "node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "depends_on": [
+    "replay_spec",
+    "ui_shell"
+   ],
+   "owns": [
+    "src/sideline/web/features/replay.js"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "timeout_min": 100,
+   "expectations": [
+    "No data is inserted with innerHTML",
+    "Every interactive element is keyboard reachable and named",
+    "A missing endpoint hides its section instead of breaking the page",
+    "The module has no global state outside its render function"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "players_spec",
+   "title": "spec and tests: players",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Players tab (order 30): searchable, sortable grid of player cards (names from annotations when available), click opens a focus panel with stats, a speed-zone chart (intensity route when available), a personal heatmap computed from frames and a mini timeline of when the player is on screen. Module src/sideline/web/features/players.js.",
+   "files": [
+    "features/players/spec.md",
+    "features/players/tests/players.test.mjs"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/players"
+   ],
+   "owns": [
+    "features/players/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "depends_on": [
+    "ui_shell"
+   ],
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Tests drive the real DOM in jsdom and assert what a user would see",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "players",
+   "title": "interface: players",
+   "spec": "features/players/spec.md",
+   "files": [
+    "src/sideline/web/features/players.js"
+   ],
+   "acceptance": [
+    "node --test features/players/tests/*.test.mjs",
+    "node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "depends_on": [
+    "players_spec",
+    "ui_shell",
+    "charts"
+   ],
+   "owns": [
+    "src/sideline/web/features/players.js"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "timeout_min": 100,
+   "expectations": [
+    "No data is inserted with innerHTML",
+    "Every interactive element is keyboard reachable and named",
+    "A missing endpoint hides its section instead of breaking the page",
+    "The module has no global state outside its render function"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "analytics_spec",
+   "title": "spec and tests: analytics",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Analytics tab (order 40): charts of team shape over time, possession over time, intensity by zone, pitch-control territory with an overlay map drawn on the pitch, and a formation panel with average positions; every section hides itself when its endpoint is missing. Module src/sideline/web/features/analytics.js.",
+   "files": [
+    "features/analytics/spec.md",
+    "features/analytics/tests/analytics.test.mjs"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/analytics"
+   ],
+   "owns": [
+    "features/analytics/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "depends_on": [
+    "ui_shell"
+   ],
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Tests drive the real DOM in jsdom and assert what a user would see",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "analytics",
+   "title": "interface: analytics",
+   "spec": "features/analytics/spec.md",
+   "files": [
+    "src/sideline/web/features/analytics.js"
+   ],
+   "acceptance": [
+    "node --test features/analytics/tests/*.test.mjs",
+    "node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "depends_on": [
+    "analytics_spec",
+    "ui_shell",
+    "charts"
+   ],
+   "owns": [
+    "src/sideline/web/features/analytics.js"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "timeout_min": 100,
+   "expectations": [
+    "No data is inserted with innerHTML",
+    "Every interactive element is keyboard reachable and named",
+    "A missing endpoint hides its section instead of breaking the page",
+    "The module has no global state outside its render function"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "library_v2_spec",
+   "title": "spec and tests: library_v2",
+   "spec": "tasks/_feature_spec.md",
+   "brief": "Library page v2, module src/sideline/web/ui/library.js loaded by library.html: card grid with generated SVG pitch thumbnails (average positions), search, sort, tag and favourite filters, rename and delete with confirmation (using the annotations route when present), a job queue panel for video processing with cancel, retry and history, drag-and-drop upload with progress, bulk selection and compare of two matches.",
+   "files": [
+    "features/library_v2/spec.md",
+    "features/library_v2/tests/library_v2.test.mjs"
+   ],
+   "acceptance": [
+    "python tools/check_spec.py features/library_v2"
+   ],
+   "owns": [
+    "features/library_v2/"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json"
+   ],
+   "review_rounds": 1,
+   "timeout_min": 60,
+   "depends_on": [
+    "ui_shell"
+   ],
+   "expectations": [
+    "Every rule has a worked numeric example that matches the test values",
+    "Tests drive the real DOM in jsdom and assert what a user would see",
+    "The tests would fail against an empty implementation"
+   ],
+   "max_attempts": 6,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "library_v2",
+   "title": "interface: library_v2",
+   "spec": "features/library_v2/spec.md",
+   "files": [
+    "src/sideline/web/ui/library.js"
+   ],
+   "acceptance": [
+    "node --test features/library_v2/tests/*.test.mjs",
+    "node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "depends_on": [
+    "library_v2_spec",
+    "ui_shell",
+    "charts",
+    "annotations"
+   ],
+   "owns": [
+    "src/sideline/web/ui/library.js",
+    "src/sideline/web/library.html"
+   ],
+   "protected": [
+    "tests",
+    "web_tests",
+    "tasks",
+    "docs/WEBAPP_CONTRACT.md",
+    "package.json",
+    "features"
+   ],
+   "timeout_min": 100,
+   "expectations": [
+    "No data is inserted with innerHTML",
+    "Every interactive element is keyboard reachable and named",
+    "A missing endpoint hides its section instead of breaking the page",
+    "The module has no global state outside its render function"
+   ],
+   "max_attempts": 6,
+   "review_rounds": 2,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  },
+  {
+   "id": "ops_docs",
+   "title": "operations kit and documentation",
+   "spec": "tasks/ops_docs.md",
+   "files": [
+    "Makefile",
+    "scripts/deploy_worker.sh",
+    "docs/ARCHITECTURE.md",
+    "docs/RUNBOOK.md"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_docs.py -q"
+   ],
+   "depends_on": [
+    "calibration_guard",
+    "service_hardening",
+    "feature_registry",
+    "ui_shell"
+   ],
+   "owns": [
+    "Makefile",
+    "scripts/deploy_worker.sh",
+    "docs/ARCHITECTURE.md",
+    "docs/RUNBOOK.md",
+    "README.md",
+    "tests/test_docs.py"
+   ],
+   "review_rounds": 2,
+   "expectations": [
+    "Every command in the docs was checked against the real command-line parser",
+    "The runbook troubleshooting table covers the failures that actually happened in this project"
+   ],
+   "max_attempts": 6,
+   "timeout_min": 90,
+   "harden": false,
+   "improve": true,
+   "thinking": [
+    "high",
+    "high",
+    "high",
+    "high",
+    "high",
+    "high"
+   ]
+  }
+ ]
+}

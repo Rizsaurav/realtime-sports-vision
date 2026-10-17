@@ -1,0 +1,565 @@
+{
+ "name": "webapp-wave-7",
+ "base_repo": "/Users/saurav/Desktop/files/sideline-agents/base",
+ "base_branch": "webapp-base",
+ "root": "/Users/saurav/Desktop/files/sideline-agents/runs/night1",
+ "tools_dir": "/Users/saurav/Desktop/files/sideline-agents/tools",
+ "servers": [
+  8000,
+  8001
+ ],
+ "ssh_host": "scc",
+ "agents": 1,
+ "deadline_hours": 1,
+ "context_window": 262144,
+ "max_tokens": 98304,
+ "thinking": [
+  "medium",
+  "high",
+  "high",
+  "high",
+  "high"
+ ],
+ "improve": true,
+ "context_kit": true,
+ "visible": true,
+ "python_packages": [
+  "pytest",
+  "fastapi",
+  "httpx",
+  "python-multipart",
+  "uvicorn",
+  "coverage"
+ ],
+ "protected": [
+  "tests",
+  "web_tests",
+  "tasks",
+  "docs/WEBAPP_CONTRACT.md",
+  "package.json"
+ ],
+ "context_paths": [
+  "src",
+  "tests",
+  "web_tests",
+  "tasks",
+  "docs"
+ ],
+ "tasks": [
+  {
+   "id": "analytics",
+   "title": "analytics engine",
+   "spec": "tasks/analytics.md",
+   "files": [
+    "src/sideline/analytics.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_analytics.py -q"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "already_merged": true
+  },
+  {
+   "id": "replay_lib",
+   "title": "replay library",
+   "spec": "tasks/replay_lib.md",
+   "files": [
+    "src/sideline/web/lib/replay.js"
+   ],
+   "acceptance": [
+    "node --test web_tests/replay.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "already_merged": true
+  },
+  {
+   "id": "ui_pages",
+   "title": "library and statistics pages",
+   "spec": "tasks/ui_pages.md",
+   "files": [
+    "src/sideline/web/lib/render.js",
+    "src/sideline/web/library.html",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/render.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "already_merged": true
+  },
+  {
+   "id": "pitch_replay",
+   "title": "pitch drawing and replay view",
+   "spec": "tasks/replay_view.md",
+   "files": [
+    "src/sideline/web/lib/pitch.js"
+   ],
+   "acceptance": [
+    "node --test web_tests/pitch.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "already_merged": true
+  },
+  {
+   "id": "matches_api",
+   "title": "match library API",
+   "spec": "tasks/matches_api.md",
+   "files": [
+    "src/sideline/matches.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_matches_api.py -q"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "owns": [
+    "src/sideline/matches.py"
+   ],
+   "improve": true,
+   "min_coverage": 85,
+   "review_rounds": 3,
+   "expectations": [
+    "Match ids are validated by one function before any file access, so path traversal is impossible",
+    "Writes to the store are atomic (write to a temporary file, then rename); a crash cannot leave a half-written match",
+    "The router contains no business logic; MatchStore holds it",
+    "All error responses go through one helper that returns the error body and the right status",
+    "The analytics module is imported lazily and its result is cached on disk",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "library_server",
+   "title": "match library application",
+   "spec": "tasks/library_server.md",
+   "files": [
+    "src/sideline/library.py",
+    "src/sideline/__main__.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_library_app.py -q"
+   ],
+   "depends_on": [
+    "analytics",
+    "matches_api",
+    "replay_lib",
+    "ui_pages"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "owns": [
+    "src/sideline/library.py",
+    "src/sideline/__main__.py",
+    "README.md"
+   ],
+   "improve": true,
+   "expectations": [
+    "Importing the library app never imports torch, cv2, numpy or the live pipeline",
+    "The README section describes only behaviour that exists in the code",
+    "The existing serve and run commands behave exactly as before",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_analytics",
+   "title": "review and harden the analytics engine",
+   "spec": "tasks/analytics.md",
+   "files": [
+    "src/sideline/analytics.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_analytics.py -q"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "min_coverage": 90,
+   "review_rounds": 3,
+   "expectations": [
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job",
+    "No logic is duplicated between functions; shared steps live in one helper",
+    "Errors are explicit: bad input raises a clear error or returns a clear failure, nothing is silently swallowed",
+    "Speed and distance step logic lives in one place and is used by players and by the ball",
+    "A recording of 100,000 frames with 22 people is summarised in under 15 seconds (measure it)",
+    "Input frames are never modified and there is no global state"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_replay",
+   "title": "review and harden the replay library",
+   "spec": "tasks/replay_lib.md",
+   "files": [
+    "src/sideline/web/lib/replay.js"
+   ],
+   "acceptance": [
+    "node --test web_tests/replay.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "All functions are pure and never modify their inputs",
+    "The Timeline depends on the clock only through the injected clock",
+    "Every edge case in the task text (empty list, single frame, duplicates, seek past the end) has a code path and a comment",
+    "No logic is duplicated between functions; shared steps live in one helper",
+    "Errors are explicit: bad input raises a clear error or returns a clear failure, nothing is silently swallowed"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_ui",
+   "title": "review and harden the pages and render library",
+   "spec": "tasks/ui_pages.md",
+   "files": [
+    "src/sideline/web/lib/render.js",
+    "src/sideline/web/library.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/render.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Every piece of data shown goes through textContent or an equivalent, never innerHTML, so recorded names cannot inject markup",
+    "Both pages are usable at 400 px width and have readable colours in light and dark colour schemes",
+    "Buttons are real buttons, tables have header scopes, links have text",
+    "A failed or empty API response shows a clear message, not a blank page or a console error",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_pitch",
+   "title": "review and harden the pitch and replay view",
+   "spec": "tasks/replay_view.md",
+   "files": [
+    "src/sideline/web/lib/pitch.js",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/pitch.test.mjs"
+   ],
+   "depends_on": [
+    "improve_ui"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Pure functions never touch the DOM or the canvas",
+    "The replay panel loads frames in chunks, keeps a bounded cache and prefetches before the end of a chunk",
+    "Space toggles play and pause only when no input has focus",
+    "The animation loop stops when the page is hidden",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "integration_tests",
+   "title": "end-to-end tests for the match library app",
+   "spec": "tasks/integration_tests.md",
+   "files": [
+    "tests_integration/test_app_end_to_end.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests_integration -q"
+   ],
+   "depends_on": [],
+   "owns": [
+    "tests_integration/"
+   ],
+   "improve": true,
+   "expectations": [
+    "Every test has a one-line docstring naming the failure it catches",
+    "The sample recording is loaded once per module, not once per test",
+    "No test depends on another test's data",
+    "The page-to-API checks read the real page files, not copies"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "review_rounds": 3,
+   "harden": true,
+   "already_merged": true
+  },
+  {
+   "id": "improve_library",
+   "title": "second review pass: match library application",
+   "spec": "tasks/library_server.md",
+   "files": [
+    "src/sideline/library.py",
+    "src/sideline/__main__.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_library_app.py tests_integration -q"
+   ],
+   "depends_on": [
+    "integration_tests"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "improve": true,
+   "expectations": [
+    "Importing the library app never imports torch, cv2, numpy or the live pipeline",
+    "The README section describes only behaviour that exists in the code",
+    "The existing serve and run commands behave exactly as before",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "type": "improve",
+   "review_rounds": 3,
+   "harden": true,
+   "min_coverage": 85,
+   "already_merged": true
+  },
+  {
+   "id": "improve_ui_2",
+   "title": "second review pass: review and harden the pages and render library",
+   "spec": "tasks/ui_pages.md",
+   "files": [
+    "src/sideline/web/lib/render.js",
+    "src/sideline/web/library.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/render.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Every piece of data shown goes through textContent or an equivalent, never innerHTML, so recorded names cannot inject markup",
+    "Both pages are usable at 400 px width and have readable colours in light and dark colour schemes",
+    "Buttons are real buttons, tables have header scopes, links have text",
+    "A failed or empty API response shows a clear message, not a blank page or a console error",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_pitch_2",
+   "title": "second review pass: review and harden the pitch and replay view",
+   "spec": "tasks/replay_view.md",
+   "files": [
+    "src/sideline/web/lib/pitch.js",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/pitch.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "type": "improve",
+   "harden": true,
+   "review_rounds": 3,
+   "expectations": [
+    "Pure functions never touch the DOM or the canvas",
+    "The replay panel loads frames in chunks, keeps a bounded cache and prefetches before the end of a chunk",
+    "Space toggles play and pause only when no input has focus",
+    "The animation loop stops when the page is hidden",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "page_smoke",
+   "title": "page smoke tests against the real API",
+   "spec": "tasks/page_smoke.md",
+   "files": [
+    "web_tests_smoke/pages.test.mjs",
+    "tests_integration/make_fixtures.py"
+   ],
+   "acceptance": [
+    "python tests_integration/make_fixtures.py && node --test web_tests_smoke/pages.test.mjs"
+   ],
+   "depends_on": [],
+   "owns": [
+    "web_tests_smoke/",
+    "tests_integration/make_fixtures.py"
+   ],
+   "improve": true,
+   "max_attempts": 5,
+   "timeout_min": 90,
+   "review_rounds": 3,
+   "harden": false,
+   "expectations": [
+    "Each test asserts what a user would see, not internal variables",
+    "Fixtures are generated from the real API, never hand-written",
+    "A page that renders blank or throws an error makes a test fail with a clear message"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "speed_quality",
+   "title": "trustworthy speed figures",
+   "spec": "tasks/speed_quality.md",
+   "files": [
+    "src/sideline/analytics.py",
+    "src/sideline/matches.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_analytics.py tests/test_matches_api.py tests/test_library_app.py tests_extra tests_integration -q"
+   ],
+   "owns": [
+    "src/sideline/analytics.py",
+    "src/sideline/matches.py",
+    "src/sideline/library.py",
+    "tests_integration/",
+    "tasks/analytics.md"
+   ],
+   "improve": true,
+   "expectations": [
+    "The smoothing rule is implemented in one function and documented",
+    "With smoothing off nothing changes",
+    "The app switches smoothing on in one place"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 75,
+   "review_rounds": 3,
+   "harden": false,
+   "already_merged": true
+  },
+  {
+   "id": "improve_ui_3",
+   "title": "third review pass: review and harden the pages and render library",
+   "spec": "tasks/ui_pages.md",
+   "files": [
+    "src/sideline/web/lib/render.js",
+    "src/sideline/web/library.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/render.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 75,
+   "type": "improve",
+   "harden": false,
+   "review_rounds": 3,
+   "expectations": [
+    "Every piece of data shown goes through textContent or an equivalent, never innerHTML, so recorded names cannot inject markup",
+    "Both pages are usable at 400 px width and have readable colours in light and dark colour schemes",
+    "Buttons are real buttons, tables have header scopes, links have text",
+    "A failed or empty API response shows a clear message, not a blank page or a console error",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_pitch_3",
+   "title": "third review pass: review and harden the pitch and replay view",
+   "spec": "tasks/replay_view.md",
+   "files": [
+    "src/sideline/web/lib/pitch.js",
+    "src/sideline/web/match.html"
+   ],
+   "acceptance": [
+    "node --test web_tests/pitch.test.mjs"
+   ],
+   "depends_on": [],
+   "max_attempts": 5,
+   "timeout_min": 75,
+   "type": "improve",
+   "harden": false,
+   "review_rounds": 3,
+   "expectations": [
+    "Pure functions never touch the DOM or the canvas",
+    "The replay panel loads frames in chunks, keeps a bounded cache and prefetches before the end of a chunk",
+    "Space toggles play and pause only when no input has focus",
+    "The animation loop stops when the page is hidden",
+    "Every public function or exported name has a short docstring or comment that states inputs, output and units",
+    "No function is longer than 60 lines and none does more than one job"
+   ],
+   "already_merged": true
+  },
+  {
+   "id": "improve_smoke",
+   "title": "review the page smoke tests",
+   "spec": "tasks/page_smoke.md",
+   "files": [
+    "web_tests_smoke/pages.test.mjs",
+    "tests_integration/make_fixtures.py"
+   ],
+   "acceptance": [
+    "python tests_integration/make_fixtures.py && node --test web_tests_smoke/pages.test.mjs"
+   ],
+   "type": "improve",
+   "depends_on": [],
+   "expectations": [
+    "Each test asserts what a user would see",
+    "Fixtures come from the real API",
+    "A blank or erroring page fails a test with a clear message"
+   ],
+   "max_attempts": 5,
+   "timeout_min": 75,
+   "review_rounds": 3,
+   "harden": false,
+   "already_merged": true
+  },
+  {
+   "id": "upload_clarity",
+   "title": "clear uploads",
+   "spec": "tasks/upload_clarity.md",
+   "files": [
+    "src/sideline/web/library.html",
+    "src/sideline/library.py",
+    "src/sideline/__main__.py"
+   ],
+   "acceptance": [
+    "python -m pytest tests/test_library_app.py tests_integration -q",
+    "python tests_integration/make_fixtures.py && node --test web_tests/*.test.mjs web_tests_smoke/*.test.mjs"
+   ],
+   "owns": [
+    "src/sideline/web/library.html",
+    "src/sideline/web/lib/render.js",
+    "src/sideline/library.py",
+    "src/sideline/__main__.py",
+    "README.md",
+    "tests_integration/",
+    "web_tests_smoke/"
+   ],
+   "improve": true,
+   "max_attempts": 5,
+   "timeout_min": 60,
+   "review_rounds": 2,
+   "harden": false,
+   "expectations": [
+    "No text on the page says that videos are accepted",
+    "Every error shown to the user states what is wrong and what to do",
+    "The limit shown to the user comes from the server, not a copy in the page"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,22 @@
+..................                                                       [100%]
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../tests/test_hidden.py::test_default_board_on_first_start
+PASSED ../tests/test_hidden.py::test_create_column_appended_at_end
+PASSED ../tests/test_hidden.py::test_column_name_validation[payload0]
+PASSED ../tests/test_hidden.py::test_column_name_validation[payload1]
+PASSED ../tests/test_hidden.py::test_duplicate_column_name_ignoring_case_is_409
+PASSED ../tests/test_hidden.py::test_add_card_fields_defaults_and_order
+PASSED ../tests/test_hidden.py::test_add_card_errors
+PASSED ../tests/test_hidden.py::test_patch_card_updates_only_given_fields
+PASSED ../tests/test_hidden.py::test_patch_card_errors
+PASSED ../tests/test_hidden.py::test_move_within_column_and_clamping
+PASSED ../tests/test_hidden.py::test_move_across_columns_inserts_at_position
+PASSED ../tests/test_hidden.py::test_move_errors
+PASSED ../tests/test_hidden.py::test_delete_card
+PASSED ../tests/test_hidden.py::test_delete_column_removes_its_cards
+PASSED ../tests/test_hidden.py::test_api_responses_are_json
+PASSED ../tests/test_hidden.py::test_index_page_is_html_with_board_container_and_fetch
+PASSED ../tests/test_hidden.py::test_local_assets_are_served
+PASSED ../tests/test_hidden.py::test_state_survives_restart
+18 passed in 1.03s

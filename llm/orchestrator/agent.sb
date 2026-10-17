@@ -1,0 +1,38 @@
+;; Seatbelt profile for one coding agent on macOS (used with: sandbox-exec -f agent.sb -D KEY=value ...)
+;; The agent may: read the system and its own tooling, read and write only its own work and home folders,
+;; talk to the model servers on localhost and fetch packages over HTTP/HTTPS.
+;; It may not: read anything else under /Users (including ssh keys and your other projects), or write outside
+;; its folders.
+(version 1)
+(deny default)
+(import "system.sb")
+
+;; processes
+(allow process-exec* process-fork)
+(allow signal (target self))
+(allow sysctl-read)
+
+(allow file-read-metadata)   ; lets path lookups work (names and sizes only, never contents)
+
+;; read-only: system, toolchains, the tools this agent is given
+(allow file-read*
+  (subpath "/usr") (subpath "/bin") (subpath "/sbin") (subpath "/System") (subpath "/Library")
+  (subpath "/Applications/Xcode.app") (subpath "/opt/homebrew") (subpath "/private/etc") (subpath "/private/var/db")
+  (subpath "/private/var/select") (subpath "/dev")
+  (literal "/") (literal "/Users") (literal "/private") (literal "/private/var") (literal "/private/tmp"))
+(allow file-read* (subpath (param "NODE_DIR")) (subpath (param "PI_DIR")))
+
+;; read and write: its own folders only (the agent's home also holds its Python virtual environment)
+(allow file-read* file-write* (subpath (param "WORK")) (subpath (param "AGENT_HOME")) (subpath (param "AGENT_TMP")))
+
+;; devices
+(allow file-write* (literal "/dev/null") (literal "/dev/zero") (literal "/dev/dtracehelper") (literal "/dev/tty")
+  (regex #"^/dev/ttys[0-9]+$"))
+
+;; network: model servers on localhost, name resolution, web package registries, local dev servers
+(allow network-outbound
+  (remote ip "localhost:8000") (remote ip "localhost:8001")
+  (remote tcp "*:443") (remote tcp "*:80")
+  (literal "/private/var/run/mDNSResponder"))
+(allow network-bind (local ip "localhost:*"))
+(allow network-inbound (local ip "localhost:*"))

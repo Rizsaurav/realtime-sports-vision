@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Decode-speed benchmark for a chat-completions HTTP server (standard library only).
+"""Decode-speed benchmark for an OpenAI-compatible server (standard library only).
 
 Runs a fixed set of coding prompts one at a time, streams each reply, and reports
 time to first token and decode tokens per second (completion tokens after the first

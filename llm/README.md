@@ -1,7 +1,7 @@
 # Qwen3.8-27B on one H100: fast single-stream serving
 
 `serve_qwen38.sh` starts vLLM with the FP8 checkpoint, CUDA graphs and the model's built-in
-MTP speculative decoder. It binds to 127.0.0.1 and speaks the chat-completions HTTP API.
+MTP speculative decoder. It binds to 127.0.0.1 and speaks the OpenAI API.
 
 ```bash
 llm/serve_qwen38.sh                      # about 3 minutes cold (kernel compile is cached afterwards)
