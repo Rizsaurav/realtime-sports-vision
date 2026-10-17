@@ -50,6 +50,56 @@ sideline run match.mp4 --delay 5 --out match.jsonl
 The first start builds TensorRT engines for the jersey models (about a minute). The
 viewer binds to localhost only; use an SSH tunnel to reach it from another machine.
 
+## Match library
+
+The match library is a small standalone web app for recorded matches: store the
+JSON-lines output of the headless runner, look at what happened and take the data
+away.
+
+```bash
+# record a match headless: one JSON object per frame (format in docs/WEBAPP_CONTRACT.md)
+python -m sideline run match.mp4 --out match.jsonl
+
+# start the library at http://127.0.0.1:8100, store in a plain folder
+python -m sideline library --root matches
+```
+
+The store is a plain folder (the `--root` argument; created if missing): one
+subfolder per match with its `frames.jsonl`, `meta.json` and a cached
+`analytics.json` (next to `analytics.json.mode`, which records the smoothing
+mode the cache was computed with and forces a recompute when the store's mode
+differs), so matches persist between starts and the folder can be moved
+or backed up as-is. `--host` and `--port` override the defaults (`127.0.0.1:8100`).
+
+- **`/library.html`** (what `/` redirects to): upload a recorded `frames.jsonl`
+  with an optional name, and list the stored matches with their name, duration,
+  frame count and size; each entry opens the match page or deletes the match.
+- **`/match.html?id=...`**: everything the analytics computed for one match -
+  a pitch replay of the recording (play, 0.25x-8x speed, timeline scrubbing),
+  team cards with average centroid and shape, a sortable player table (distance,
+  average and max speed, sprints), heatmaps for both teams and the ball, and
+  CSV exports of per-frame positions and per-player stats.
+
+**Video upload.** To turn a raw video into a match without running the headless
+command by hand, start the video worker on the GPU machine
+(`python -m sideline worker --root worker_data`) and point the library at it:
+
+```bash
+python -m sideline library --root matches --worker http://<gpu-host>:8200
+```
+
+The upload form then also accepts video files (`.avi` `.mkv` `.mov` `.mp4`
+`.webm`): the browser streams the video to the worker with a progress bar,
+the page shows a job row that polls the worker every three seconds ("Processing
+42%"), and a finished video is stored as a normal match - the job row becomes
+an Open link to the match and the match joins the list. A failed job shows the
+worker's error. Without `--worker` the page says video processing is not
+available and only recorded files are accepted.
+
+The library itself needs no GPU and no model weights: it only reads and serves
+the recorded frames; a video is processed on the worker's machine, where the
+pipeline runs.
+
 ## Results
 
 SoccerNet-GSR, official GS-HOTA. Test is the 49-clip public test split, with every setting

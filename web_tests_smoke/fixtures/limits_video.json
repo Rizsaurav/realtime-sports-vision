@@ -1,0 +1,5 @@
+{
+  "max_upload_bytes": 104857600,
+  "video_enabled": true,
+  "max_video_bytes": 2147483648
+}
