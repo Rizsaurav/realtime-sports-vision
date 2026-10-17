@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Match · Sideline</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/pages.css">
+<link rel="stylesheet" href="/static/match.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="name">SIDELINE</span>
+  </div>
+  <h1 class="bar-title" id="barTitle">Match</h1>
+  <nav class="bar-nav" aria-label="Page">
+    <a class="navlink" href="/library.html">Back to library</a>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="alert" id="alert" role="alert" hidden></div>
+  <p class="status" id="status" aria-live="polite"></p>
+
+  <section class="section">
+    <div class="match-meta" id="metaBox">
+      <div class="m-name" id="matchName">Loading…</div>
+      <div class="m-facts" id="matchFacts"></div>
+    </div>
+    <div class="actions" id="actions" hidden>
+      <a id="exportPositions" download>Export positions CSV</a>
+      <a id="exportPlayers" download>Export players CSV</a>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Teams</h2>
+    </div>
+    <div id="teamCards" class="team-cards"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Replay</h2>
+    </div>
+    <div class="replay-stage">
+      <canvas id="replay" width="1130" height="760"></canvas>
+      <p class="replay-loading" id="replayLoading">Loading replay...</p>
+    </div>
+    <div class="replay-controls">
+      <button type="button" id="play">Play</button>
+      <input type="range" id="timeline" min="0" max="1" step="1" value="0" aria-label="Replay position">
+      <select id="speed" aria-label="Playback speed">
+        <option value="0.25">0.25x</option>
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="2">2x</option>
+        <option value="4">4x</option>
+        <option value="8">8x</option>
+      </select>
+      <span id="clock" class="replay-clock">0:00.0</span>
+    </div>
+    <p class="replay-error" id="replayError" role="alert" hidden></p>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Players</h2>
+      <span class="meta">Tap a column to sort</span>
+    </div>
+    <div id="playerTable" class="table-wrap"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Heatmaps</h2>
+    </div>
+    <div class="heatmaps">
+      <figure class="heat">
+        <figcaption class="heat-cap">Left team</figcaption>
+        <div id="heatLeft" class="heat-box"></div>
+      </figure>
+      <figure class="heat">
+        <figcaption class="heat-cap">Right team</figcaption>
+        <div id="heatRight" class="heat-box"></div>
+      </figure>
+      <figure class="heat">
+        <figcaption class="heat-cap">Ball</figcaption>
+        <div id="heatBall" class="heat-box"></div>
+      </figure>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import {
+  renderPlayerTable,
+  renderTeamCards,
+  renderHeatmap,
+  formatDuration,
+  formatBytes,
+} from "/static/lib/render.js";
+import { Timeline, interpolatePeople, interpolateBall, formatClock } from "/static/lib/replay.js";
+import {
+  PITCH,
+  pitchGeometry,
+  pitchToCanvas,
+  personStyle,
+  chunkRanges,
+  chunkStartFor,
+  FrameCache,
+} from "/static/lib/pitch.js";
+
+const statusEl = document.getElementById("status");
+const alertEl = document.getElementById("alert");
+const matchName = document.getElementById("matchName");
+const matchFacts = document.getElementById("matchFacts");
+const actions = document.getElementById("actions");
+const teamCards = document.getElementById("teamCards");
+const playerTable = document.getElementById("playerTable");
+const barTitle = document.getElementById("barTitle");
+
+const id = new URLSearchParams(location.search).get("id");
+const enc = (v) => encodeURIComponent(String(v));
+
+// Set the shared status line text (a string). Returns nothing.
+function setStatus(text) {
+  statusEl.textContent = text;
+}
+
+// Show the page alert (role="alert") with a message string. Returns nothing.
+function showAlert(text) {
+  alertEl.textContent = text;
+  alertEl.hidden = false;
+}
+
+// Clear and hide the page alert. Returns nothing.
+function clearAlert() {
+  alertEl.textContent = "";
+  alertEl.hidden = true;
+}
+
+// Build the " : message" suffix for an error object; falls back to
+// "request failed". Output: a string.
+function errDetail(err) {
+  return ": " + (err && err.message ? err.message : "request failed") + ".";
+}
+
+// Fetch a JSON response. Input: a URL string. Output (resolved): the parsed
+// response object. Rejects on an HTTP error status.
+async function fetchJson(url) {
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error("the server answered " + res.status);
+  return res.json();
+}
+
+// Table sorting: first click on a column sorts it ascending, clicking the
+// same column again flips it to descending. The library sorts and
+// re-renders.
+const sortState = { key: "distance_m", descending: true };
+let players = [];
+
+// Handle a sort click on a table column. Input: the column key string.
+// Returns nothing.
+function onSort(key) {
+  if (sortState.key === key) {
+    sortState.descending = !sortState.descending;
+  } else {
+    sortState.key = key;
+    sortState.descending = false;
+  }
+  renderTable();
+}
+
+// Re-render the player table from `players` with the current sort state.
+// Returns nothing.
+function renderTable() {
+  renderPlayerTable(playerTable, players, {
+    sortKey: sortState.key,
+    descending: sortState.descending,
+    onSort,
+  });
+}
+
+// The export links need only the match id, not the metadata, so they are
+// attached and shown as soon as the id is known, independent of whether
+// GET /api/matches/<id> succeeds. Returns nothing.
+function showExports() {
+  document.getElementById("exportPositions").href = "/api/matches/" + enc(id) + "/export.csv?kind=positions";
+  document.getElementById("exportPlayers").href = "/api/matches/" + enc(id) + "/export.csv?kind=players";
+  actions.hidden = false;
+}
+
+// Render the match metadata. Input: a meta object from
+// GET /api/matches/<id> (duration_s in seconds, size_bytes in bytes).
+// Returns nothing.
+function renderMeta(meta) {
+  matchName.textContent =
+    meta.name !== null && meta.name !== undefined && meta.name !== "" ? String(meta.name) : "Match " + enc(id);
+  barTitle.textContent = matchName.textContent;
+  matchFacts.replaceChildren(
+    fact("Duration", formatDuration(meta.duration_s)),
+    fact("Size", formatBytes(meta.size_bytes)),
+    fact("Frames", meta.frame_count !== null && meta.frame_count !== undefined ? String(meta.frame_count) : "\u2013"),
+  );
+}
+
+// Build one "label value" metadata span. Inputs: two strings. Output: a
+// span element.
+function fact(label, value) {
+  const span = document.createElement("span");
+  span.textContent = label + " " + value;
+  return span;
+}
+
+// Render the analytics summary into the player table, team cards and
+// heatmaps. Inputs: a summary object (the analytics endpoint shape) and a
+// colors object or null. Returns nothing.
+function renderSummary(summary, colors) {
+  players = Array.isArray(summary.players) ? summary.players : [];
+  renderTable();
+  renderTeamCards(teamCards, summary.teams, colors);
+  const heat = summary.heatmaps || {};
+  renderHeatmap(document.getElementById("heatLeft"), heat.left);
+  renderHeatmap(document.getElementById("heatRight"), heat.right);
+  renderHeatmap(document.getElementById("heatBall"), heat.ball);
+}
+
+// Load the match metadata and analytics in parallel and show whatever
+// succeeds. Input: none (uses the page's match id). Output (resolved): a
+// {meta, summary} object, either half null when that request failed.
+async function loadMatch() {
+  clearAlert();
+  showExports();
+  setStatus("Loading match " + enc(id) + "\u2026");
+  const base = "/api/matches/" + enc(id);
+  // Metadata and analytics load in parallel; whatever succeeds is shown.
+  const [metaRes, sumRes] = await Promise.allSettled([
+    fetchJson(base),
+    fetchJson(base + "/analytics"),
+  ]);
+  setStatus("");
+  const meta = metaRes.status === "fulfilled" ? metaRes.value : null;
+  const summary = sumRes.status === "fulfilled" ? sumRes.value : null;
+  const problems = [];
+  if (metaRes.status === "rejected") problems.push("metadata" + errDetail(metaRes.reason));
+  if (sumRes.status === "rejected") problems.push("analytics" + errDetail(sumRes.reason));
+  if (!meta) {
+    matchName.textContent = "Match " + enc(id);
+  } else {
+    renderMeta(meta);
+  }
+  if (summary) {
+    renderSummary(summary, meta && meta.colors ? meta.colors : null);
+  }
+  if (problems.length) {
+    showAlert("Could not load the match: " + problems.join("; ") + ".");
+  }
+  return { meta, summary };
+}
+
+// --------------------------------------------------------------- replay panel
+const replayCanvas = document.getElementById("replay");
+const replayCtx = replayCanvas.getContext("2d");
+const timelineEl = document.getElementById("timeline");
+const playBtn = document.getElementById("play");
+const speedSel = document.getElementById("speed");
+const clockEl = document.getElementById("clock");
+const replayLoading = document.getElementById("replayLoading");
+const replayError = document.getElementById("replayError");
+
+const REPLAY_FPS = 25; // frames per second in the recording
+const REPLAY_CHUNK = 250; // frame numbers covered by one chunk
+const REPLAY_RETRY_MS = 5000; // backoff before re-fetching a failed chunk
+const FALLBACK = { left: "#e4572e", right: "#3e8ed0" };
+const CHALK = "rgba(255,255,255,0.85)";
+const TURF_A = "#1b5a3a";
+const TURF_B = "#17503a";
+
+let rFirst = null; // first frame number of the match (integer)
+let rLast = null; // last frame number of the match (integer)
+let chunkEnd = null; // chunk start -> chunk end (frame numbers, inclusive)
+let cache = null; // FrameCache of loaded chunks (cap 4, chunk size 250)
+let loaded = []; // one flat list of the loaded frames, increasing frame order
+let loadedByStart = new Map(); // chunk start -> that chunk's frames array
+let lastColors = null; // last non-null colors seen in a loaded frame
+let timeline = null; // Timeline over `loaded`; position and duration in seconds
+let wantedPlaying = false; // the user asked for playback; a chunk that arrives
+                           // while the loaded window is at its end resumes it
+let restartPending = false; // a "play again from 0" click is waiting for the
+                            // evicted head chunk to be refetched; a click
+                            // while it is pending cancels it
+let inFlight = new Set(); // chunk start frame numbers being fetched
+let pendingSeek = null; // { start, value }: a seek into an evicted head region; applied
+                         // in onChunkArrived once the chunk `start` containing frame
+                         // `value` has been loaded
+let failedAt = new Map(); // chunk start -> performance.now() ms of last failed fetch
+let rafId = 0; // pending requestAnimationFrame handle
+
+// The replay controls stay disabled until the first chunk has arrived (or
+// the replay is unavailable).
+playBtn.disabled = true;
+timelineEl.disabled = true;
+speedSel.disabled = true;
+
+// Set the replay canvas width/height attributes to its CSS size in device
+// pixels (the CSS keeps the 113:76 aspect so the pitch with margin fills
+// it). Inputs: none (reads the canvas box). Returns nothing.
+function sizeReplayCanvas() {
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(replayCanvas.clientWidth * dpr));
+  const h = Math.max(1, Math.round(replayCanvas.clientHeight * dpr));
+  if (replayCanvas.width !== w || replayCanvas.height !== h) {
+    replayCanvas.width = w;
+    replayCanvas.height = h;
+  }
+}
+
+// Draw the pitch lines (113 m by 76 m area, metres) onto ctx using the
+// transform g from pitchGeometry (k pixels per metre, ox/oy in canvas
+// pixels): mowing stripes, outline, halfway line, centre circle and spot,
+// penalty areas, six-yard boxes, goals, penalty spots and arcs.
+// Returns nothing.
+function drawPitchLines(ctx, g) {
+  const { k, ox, oy } = g;
+  const X = (x) => ox + x * k;
+  const Y = (y) => oy + y * k;
+  const L = PITCH.length / 2;
+  const Wd = PITCH.width / 2;
+  // mowing stripes, 11 bands across the length
+  const band = PITCH.length / 11;
+  for (let i = 0; i < 11; i++) {
+    ctx.fillStyle = i % 2 ? TURF_B : TURF_A;
+    ctx.fillRect(X(-L + i * band), Y(-Wd), band * k + 1, PITCH.width * k);
+  }
+  ctx.strokeStyle = CHALK;
+  ctx.lineWidth = Math.max(1.5, k * 0.14);
+  ctx.strokeRect(X(-L), Y(-Wd), PITCH.length * k, PITCH.width * k);
+  ctx.beginPath(); ctx.moveTo(X(0), Y(-Wd)); ctx.lineTo(X(0), Y(Wd)); ctx.stroke();
+  ctx.beginPath(); ctx.arc(X(0), Y(0), 9.15 * k, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = CHALK;
+  ctx.beginPath(); ctx.arc(X(0), Y(0), k * 0.35, 0, Math.PI * 2); ctx.fill();
+  for (const s of [-1, 1]) {
+    const gx = s * L;
+    ctx.strokeRect(Math.min(X(gx), X(gx - s * 16.5)), Y(-20.16), 16.5 * k, 40.32 * k);
+    ctx.strokeRect(Math.min(X(gx), X(gx - s * 5.5)), Y(-9.16), 5.5 * k, 18.32 * k);
+    ctx.strokeRect(Math.min(X(gx), X(gx + s * 2)), Y(-3.66), 2 * k, 7.32 * k);
+    ctx.beginPath(); ctx.arc(X(gx - s * 11), Y(0), k * 0.3, 0, Math.PI * 2); ctx.fill();
+    const a = Math.acos(5.5 / 9.15);
+    ctx.beginPath();
+    if (s < 0) ctx.arc(X(gx + 11), Y(0), 9.15 * k, -a, a);
+    else ctx.arc(X(gx - 11), Y(0), 9.15 * k, Math.PI - a, Math.PI + a);
+    ctx.stroke();
+  }
+}
+
+// Pick a readable label colour for a #rrggbb fill. Input: a CSS colour
+// string (the person fill). Output: a near-black or white CSS colour.
+function textOn(color) {
+  const hex = typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) ? color : "#9aa59f";
+  const c = hex.slice(1);
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#0b0f0d" : "#ffffff";
+}
+
+// Draw one Timeline view on the replay canvas. Input: a view object
+// {a, b, t} from Timeline (frames and interpolation factor, t in 0..1):
+// people and ball are interpolated between a and b, positioned in metres,
+// mapped with pitchToCanvas and drawn as circles. Returns nothing.
+function drawView(view) {
+  const ctx = replayCtx;
+  if (!ctx) return;
+  const g = pitchGeometry(replayCanvas.width, replayCanvas.height);
+  ctx.clearRect(0, 0, replayCanvas.width, replayCanvas.height);
+  ctx.fillStyle = "#123826";
+  ctx.fillRect(0, 0, replayCanvas.width, replayCanvas.height);
+  drawPitchLines(ctx, g);
+  const { a, b, t } = view;
+  const people = interpolatePeople(a, b, t);
+  const ball = interpolateBall(a, b, t);
+  const colors = a.colors !== null && a.colors !== undefined ? a.colors : lastColors;
+  const r = Math.max(9, g.k * 1.9);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `700 ${Math.round(r * 1.1)}px "IBM Plex Mono", monospace`;
+  for (const p of people) {
+    if (p.xy === null || p.xy === undefined) continue;
+    const [x, y] = p.xy;
+    if (Math.abs(x) > 60 || Math.abs(y) > 42) continue;
+    const st = personStyle(p, colors, FALLBACK);
+    const [px, py] = pitchToCanvas(p.xy, g);
+    ctx.fillStyle = st.fill;
+    ctx.strokeStyle = st.stroke;
+    ctx.lineWidth = st.strokeWidth;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (st.label !== "") {
+      ctx.fillStyle = textOn(st.fill);
+      ctx.fillText(st.label, px, py + 0.5);
+    }
+  }
+  if (ball !== null && ball.xy !== null && ball.xy !== undefined) {
+    const [bx, by] = pitchToCanvas(ball.xy, g);
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(bx, by, r * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+}
+
+// Draw the empty pitch only (before the first frame has loaded).
+// Returns nothing.
+function drawPitchOnly() {
+  const ctx = replayCtx;
+  if (!ctx) return;
+  ctx.clearRect(0, 0, replayCanvas.width, replayCanvas.height);
+  ctx.fillStyle = "#123826";
+  ctx.fillRect(0, 0, replayCanvas.width, replayCanvas.height);
+  drawPitchLines(ctx, pitchGeometry(replayCanvas.width, replayCanvas.height));
+}
+
+// Set the slider value to the element table's "the current frame number":
+// the window head (loaded[0].frame, the first loaded frame) plus the
+// Timeline's window-relative position in frames, rounded to an integer.
+// The seek is window-relative too, so the thumb stays where a drag would
+// land even after a head-chunk eviction. While a seek into an evicted
+// region is waiting for its chunk, the thumb stays where the user put it.
+// Returns nothing.
+function updateSlider() {
+  if (!timeline || loaded.length === 0) return;
+  if (pendingSeek) return; // its chunk has not arrived yet; do not snap back
+  timelineEl.value = String(Math.round(loaded[0].frame + timeline.position * REPLAY_FPS));
+}
+
+// Set the clock to the match time at the current Timeline position:
+// formatClock of the window head's match time ((loaded[0].frame - rFirst)
+// / 25) plus the window-relative position, followed by " / " and the full
+// match span (rLast - rFirst) / 25. Before the first chunk has loaded it
+// reads 0:00.0. Returns nothing.
+function updateClock() {
+  if (!timeline) {
+    clockEl.textContent = "0:00.0";
+    return;
+  }
+  const total = (rLast - rFirst) / REPLAY_FPS;
+  const into = (loaded[0].frame - rFirst) / REPLAY_FPS + timeline.position;
+  clockEl.textContent = formatClock(into) + " / " + formatClock(total);
+}
+
+// The absolute match frame number (a float, frame numbers) at the current
+// Timeline position, or null when nothing is loaded.
+function currentFrame() {
+  if (!timeline || loaded.length === 0) return null;
+  return loaded[0].frame + timeline.position * REPLAY_FPS;
+}
+
+// True when view.a and view.b are contiguous in the data - the same chunk
+// or adjacent chunks - not merely neighbours in `loaded`; this keeps a gap
+// left by an evicted middle chunk from being drawn as a long interpolation.
+// Input: a view object {a, b}. Output: a boolean.
+function contiguous(view) {
+  if (view.b === view.a) return true;
+  const sa = chunkStartFor(view.a.frame, rFirst, REPLAY_CHUNK);
+  const sb = chunkStartFor(view.b.frame, rFirst, REPLAY_CHUNK);
+  return sb - sa <= REPLAY_CHUNK;
+}
+
+// Redraw only when the frames around the current position are loaded;
+// otherwise keep the last drawn picture while the data is being fetched.
+// Returns nothing.
+function drawIfCovers() {
+  if (!timeline) return;
+  const view = timeline.current();
+  if (view && contiguous(view)) drawView(view);
+}
+
+// Prune the frames of chunks the cache has evicted, then rebuild `loaded`
+// in place (the same array reference the Timeline holds) as the flat
+// increasing-frame list of the cached chunks, dropping frames that are
+// already there, and update `lastColors` (the last non-null colors seen in
+// a loaded frame). Inputs: none. Output (returned): true when the covered
+// frame span (first or last loaded frame) changed, or nothing is loaded.
+function mergeLoadedFrames() {
+  const alive = new Set(cache.starts());
+  for (const start of [...loadedByStart.keys()]) {
+    if (!alive.has(start)) loadedByStart.delete(start);
+  }
+  const starts = [...loadedByStart.keys()].sort((x, y) => x - y);
+  const merged = [];
+  lastColors = null;
+  const seen = new Set();
+  for (const start of starts) {
+    for (const f of loadedByStart.get(start)) {
+      if (seen.has(f.frame)) continue; // drop frames already there
+      seen.add(f.frame);
+      merged.push(f);
+      if (f.colors !== null && f.colors !== undefined) lastColors = f.colors;
+    }
+  }
+  const spanChanged =
+    merged.length === 0 ||
+    loaded.length === 0 ||
+    merged[0].frame !== loaded[0].frame ||
+    merged[merged.length - 1].frame !== loaded[loaded.length - 1].frame;
+  loaded.length = 0;
+  loaded.push(...merged);
+  return spanChanged;
+}
+
+// Re-anchor the Timeline on `loaded` after mergeLoadedFrames when the
+// covered span changed: recreate the Timeline over `loaded`, restore the
+// old speed, and seek back to the old position (absolute frame numbers).
+// When the chunk holding the old position was just evicted (oldAbs before
+// the new window head), the seek is deferred instead: pendingSeek stores
+// it and fetchChunk refetches that chunk, and onChunkArrived applies the
+// seek once it arrives. Then resume playback when wantedPlaying. Inputs:
+// the spanChanged flag from mergeLoadedFrames and the pre-merge absolute
+// position (frame number, or null) and speed. Returns nothing.
+function reanchorTimeline(spanChanged, oldAbs, oldSpeed) {
+  if (loaded.length === 0) {
+    timeline = null;
+    return;
+  }
+  if (!spanChanged) return;
+  timeline = new Timeline({ frames: loaded, fps: REPLAY_FPS });
+  timeline.setSpeed(oldSpeed);
+  if (pendingSeek === null && oldAbs !== null) {
+    if (oldAbs < loaded[0].frame) {
+      // The chunk holding the old position was just evicted: seeking now
+      // would clamp to the new window head and silently lose the seek.
+      // Fetch that chunk instead and apply the seek in onChunkArrived -
+      // the same deferred path the slider uses for values before the
+      // window head.
+      pendingSeek = { start: chunkStartFor(oldAbs, rFirst, REPLAY_CHUNK), value: oldAbs };
+      fetchChunk(pendingSeek.start);
+    } else {
+      timeline.seek((oldAbs - loaded[0].frame) / REPLAY_FPS);
+    }
+  }
+  if (wantedPlaying) {
+    // The old window ended while the user wanted playback (the Timeline
+    // auto-paused and the loop stopped); the span now extends, so resume.
+    startReplay();
+  }
+}
+
+// Merge the cached chunks into `loaded` and re-anchor the Timeline on the
+// new window, keeping the playhead at the same absolute frame. The old
+// position and speed are read before the merge, since mergeLoadedFrames
+// mutates `loaded` in place. Inputs: none. Returns nothing.
+function rebuildTimeline() {
+  const oldAbs = currentFrame();
+  const oldSpeed = timeline ? timeline.speed : 1;
+  const spanChanged = mergeLoadedFrames();
+  reanchorTimeline(spanChanged, oldAbs, oldSpeed);
+}
+
+// Show the replay error alert (role="alert"). Input: a message string.
+// The DOM is written at most once per distinct message. Returns nothing.
+function showReplayError(message) {
+  replayLoading.hidden = true;
+  if (!replayError.hidden && replayError.textContent === message) return;
+  replayError.textContent = message;
+  replayError.hidden = false;
+}
+
+// Fetch one chunk (a chunk start frame number) with
+// GET /api/matches/<id>/frames?start=<start>&end=<end>, unless it is
+// already cached, already in flight, or last failed less than
+// REPLAY_RETRY_MS ago. On success the frames are stored via
+// onChunkArrived; on failure the time is recorded, the alert is shown and
+// one retry is scheduled after the backoff. Returns nothing.
+function fetchChunk(start) {
+  if (!Number.isInteger(start)) return;
+  if (start < rFirst || start > rLast) return;
+  if (!chunkEnd.has(start)) return;
+  if (cache.has(start) || inFlight.has(start)) return;
+  const lastFail = failedAt.get(start);
+  if (lastFail !== undefined && performance.now() - lastFail < REPLAY_RETRY_MS) return;
+  inFlight.add(start);
+  fetch("/api/matches/" + enc(id) + "/frames?start=" + start + "&end=" + chunkEnd.get(start))
+    .then((res) => {
+      if (!res.ok) throw new Error("the server answered " + res.status);
+      return res.json();
+    })
+    .then((j) => {
+      inFlight.delete(start);
+      onChunkArrived(start, j && Array.isArray(j.frames) ? j.frames : []);
+    })
+    .catch((err) => {
+      inFlight.delete(start);
+      failedAt.set(start, performance.now());
+      showReplayError("Could not load replay frames" + errDetail(err));
+      if (timeline) {
+        setTimeout(prefetch, REPLAY_RETRY_MS); // retry even while paused
+      } else {
+        // No Timeline yet: the first chunk failed, and prefetch() cannot run
+        // (currentFrame() is null without a Timeline), so retry this chunk
+        // directly after the backoff.
+        setTimeout(() => fetchChunk(start), REPLAY_RETRY_MS);
+      }
+    });
+}
+
+// Store one arrived chunk and refresh the replay: put the chunk in the
+// cache, merge it into `loaded` and re-anchor the Timeline, apply a seek
+// that was waiting for this chunk, clear the loading/error UI, and
+// redraw. Inputs: a chunk start (frame number) and its frames array (frame
+// objects, increasing frame order). Returns nothing.
+function onChunkArrived(start, frames) {
+  cache.put(start, frames);
+  loadedByStart.set(start, frames);
+  failedAt.delete(start);
+  if (pendingSeek && pendingSeek.start === start) restartPending = false;
+  rebuildTimeline();
+  applyPendingSeek(start);
+  markReplayReady();
+  updateClock();
+  drawIfCovers();
+}
+
+// Apply a seek that was waiting for its chunk to be loaded, now that the
+// chunk has arrived (the frame lies inside the new window, so the
+// window-relative seek reaches it). Inputs: the chunk start that just
+// arrived. Returns nothing.
+function applyPendingSeek(start) {
+  if (!pendingSeek || pendingSeek.start !== start || !timeline) return;
+  const value = pendingSeek.value;
+  pendingSeek = null;
+  timeline.seek((value - loaded[0].frame) / REPLAY_FPS);
+  updateSlider();
+}
+
+// The data is flowing again: clear the replay error alert and the loading
+// text, and re-enable the controls. Inputs: none. Returns nothing.
+function markReplayReady() {
+  replayError.textContent = "";
+  replayError.hidden = true;
+  replayLoading.hidden = true;
+  playBtn.disabled = false;
+  timelineEl.disabled = false;
+  speedSel.disabled = false;
+}
+
+// Prefetch around the current frame number n: the chunk containing n, and,
+// when n is within 50 frames of that chunk's end, the next chunk if it is
+// still inside first..last. Cached and in-flight chunks are skipped.
+// Inputs: none (reads the Timeline position). Returns nothing.
+function prefetch() {
+  if (rFirst === null || rLast === null) return;
+  const n = currentFrame();
+  if (n === null) return;
+  const s = chunkStartFor(n, rFirst, REPLAY_CHUNK);
+  fetchChunk(s);
+  if (n >= s + REPLAY_CHUNK - 50) fetchChunk(s + REPLAY_CHUNK);
+  // A seek into an evicted region is waiting for its chunk (a failed
+  // attempt may sit out the retry backoff): keep trying.
+  if (pendingSeek) fetchChunk(pendingSeek.start);
+}
+
+// One animation iteration: advance the Timeline (view = timeline.tick()),
+// draw the view, update the slider and the clock, prefetch, and schedule
+// the next iteration while timeline.playing is true; when the Timeline has
+// stopped by itself at the end the button text returns to "Play". While
+// paused no loop runs. Returns nothing.
+function loop() {
+  rafId = 0;
+  const before = timeline.position;
+  let view = timeline.tick();
+  if (timeline.position - before > 2) {
+    // The tab was hidden or suspended, so rAF did not run: cap the jump
+    // instead of fast-forwarding over the whole hidden duration. Resume
+    // from where playback left off and pause.
+    timeline.seek(before);
+    timeline.pause();
+    view = timeline.current();
+  }
+  if (view && contiguous(view)) drawView(view);
+  updateSlider();
+  updateClock();
+  prefetch();
+  if (timeline.playing) {
+    rafId = requestAnimationFrame(loop);
+  } else {
+    playBtn.textContent = "Play";
+  }
+}
+
+// Start playback: timeline.play() (restarts from 0 when the Timeline has
+// ended), the button reads "Pause", and the animation loop runs. When the
+// Timeline has ended but the window no longer starts at the match's first
+// frame (head chunks evicted), "Play again restarts at 0" cannot go through
+// timeline.play(), whose restart lands at the window head up to 1000 frames
+// into the match: instead the seek to rFirst is routed through the same
+// deferred mechanism the slider uses (pendingSeek + fetchChunk of the head
+// chunk); the button keeps reading "Play" while nothing plays, the thumb
+// moves to rFirst, and the loop starts once the chunk arrives
+// (reanchorTimeline sees wantedPlaying and the re-anchored window starts
+// at rFirst, so play() restarts at the true 0, and applyPendingSeek then
+// applies the stored seek, a no-op at 0). While the chunk is being fetched
+// the last drawn picture is kept, as for any missing data; a failed fetch
+// is retried with the usual backoff. A click while the restart is pending
+// cancels it (clear the pending seek, keep paused, button stays "Play").
+// Inputs: none. Returns nothing.
+function startReplay() {
+  if (!timeline) return;
+  if (restartPending) {
+    // A second click while the head chunk is being refetched cancels the
+    // restart: nothing is playing, so the button keeps reading "Play".
+    restartPending = false;
+    wantedPlaying = false;
+    pendingSeek = null;
+    updateSlider();
+    return;
+  }
+  wantedPlaying = true;
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+  if (timeline.position >= timeline.duration && loaded[0].frame > rFirst) {
+    const s = chunkStartFor(rFirst, rFirst, REPLAY_CHUNK);
+    restartPending = true;
+    pendingSeek = { start: s, value: rFirst };
+    timelineEl.value = String(rFirst);
+    if (!cache.has(s) && !inFlight.has(s)) fetchChunk(s);
+    return; // the loop starts in reanchorTimeline once the chunk arrives
+  }
+  restartPending = false;
+  timeline.play();
+  playBtn.textContent = "Pause";
+  updateSlider();
+  updateClock();
+  rafId = requestAnimationFrame(loop);
+}
+
+// Pause playback: timeline.pause() (advances to now, then stops), the
+// animation frame is cancelled, the button reads "Play". Inputs: none.
+// Returns nothing.
+function pauseReplay() {
+  if (!timeline) return;
+  wantedPlaying = false;
+  timeline.pause();
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+  playBtn.textContent = "Play";
+  updateSlider();
+  updateClock();
+  drawIfCovers();
+}
+
+// Toggle playback like a click on the button: pause when playing, play
+// otherwise. Inputs: none. Returns nothing.
+function togglePlay() {
+  if (timeline && timeline.playing) pauseReplay();
+  else startReplay();
+}
+
+// Mark the replay unavailable with a message string and disable the
+// controls. Inputs: a message string. Returns nothing.
+function replayUnavailable(message) {
+  replayLoading.hidden = true;
+  replayError.textContent = message;
+  replayError.hidden = false;
+  playBtn.disabled = true;
+  timelineEl.disabled = true;
+  speedSel.disabled = true;
+}
+
+// Initialise the replay panel once the meta is known. Inputs: the meta
+// object and the analytics summary (each possibly null); first_frame and
+// last_frame (frame numbers) come from the meta, falling back to the
+// summary. Sets the slider bounds, the clock to 0:00.0, the button to
+// "Play", and fetches the chunk of the first frame. Returns nothing.
+function initReplay(meta, summary) {
+  const intOf = (v) => (Number.isInteger(v) ? v : null);
+  const first = intOf(meta && meta.first_frame) ?? intOf(summary && summary.first_frame);
+  const last = intOf(meta && meta.last_frame) ?? intOf(summary && summary.last_frame);
+  if (first === null || last === null || last < first) {
+    replayUnavailable("Replay unavailable: the match has no recorded frames.");
+    return;
+  }
+  rFirst = first;
+  rLast = last;
+  chunkEnd = new Map(chunkRanges(first, last, REPLAY_CHUNK).map((r) => [r.start, r.end]));
+  cache = new FrameCache(4);
+  timelineEl.min = String(first);
+  timelineEl.max = String(last);
+  timelineEl.value = String(first);
+  updateClock();
+  playBtn.textContent = "Play";
+  fetchChunk(first);
+}
+
+sizeReplayCanvas();
+drawPitchOnly();
+
+// Play/pause toggle (click on the button).
+playBtn.addEventListener("click", togglePlay);
+
+// Dragging the slider: the spec's seek is (value - first) / 25; the
+// Timeline is anchored at the first LOADED frame (head chunks are evicted
+// to keep the cache bounded), so the seek is window-relative:
+// (value - loaded[0].frame) / 25. When value lies before the window, its
+// chunk has been evicted and the Timeline would clamp to the window start
+// (silently losing the seek), so instead fetch that chunk, keep the thumb
+// where the user put it, and store the seek to apply in onChunkArrived.
+// Then update the clock, prefetch and draw. Seeking does not change the
+// play/pause state; while playing the loop continues.
+timelineEl.addEventListener("input", () => {
+  if (!timeline || loaded.length === 0) return;
+  const v = Number(timelineEl.value);
+  if (!Number.isFinite(v)) return;
+  if (v < loaded[0].frame) {
+    const s = chunkStartFor(v, rFirst, REPLAY_CHUNK);
+    restartPending = false; // the user moved the thumb; the restart is not what is asked
+    pendingSeek = { start: s, value: v };
+    if (!cache.has(s) && !inFlight.has(s)) fetchChunk(s);
+    return;
+  }
+  restartPending = false;
+  pendingSeek = null;
+  timeline.seek((v - loaded[0].frame) / REPLAY_FPS);
+  updateSlider();
+  updateClock();
+  prefetch();
+  drawIfCovers();
+});
+
+// Changing the speed: timeline.setSpeed with the select's value; when it
+// throws, restore the select to the current speed. The position does not
+// jump.
+speedSel.addEventListener("change", () => {
+  if (!timeline) return;
+  const prev = String(timeline.speed);
+  try {
+    timeline.setSpeed(Number(speedSel.value));
+  } catch {
+    speedSel.value = prev;
+  }
+});
+
+// Space bar: same as a click on play, with preventDefault. Ignored when the
+// focus is in an input, select or textarea other than the slider, and on
+// the focused play button (its native activation would toggle twice).
+document.addEventListener("keydown", (ev) => {
+  if (ev.code !== "Space") return;
+  if (ev.repeat) return; // a held space bar must not auto-repeat the toggle
+  const el = document.activeElement;
+  if (el === playBtn) return;
+  if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA") && el !== timelineEl) return;
+  ev.preventDefault();
+  togglePlay();
+});
+
+// Redraw the current picture at the new canvas size on window resize.
+window.addEventListener("resize", () => {
+  sizeReplayCanvas();
+  const view = timeline ? timeline.current() : null;
+  if (view && contiguous(view)) drawView(view);
+  else drawPitchOnly();
+});
+
+// Stop playback when the page is hidden or left: pause (which advances at
+// most the few ms since the last tick, so the playhead does not jump by
+// the hidden duration), cancel the animation frame, and leave the button
+// reading "Play" so a bfcache-restored page does not claim to be playing.
+function stopPlayback() {
+  if (timeline && timeline.playing) pauseReplay();
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+}
+window.addEventListener("pagehide", stopPlayback);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopPlayback();
+});
+
+if (!id) {
+  setStatus("");
+  matchName.textContent = "No match selected";
+  showAlert("No match id in the address. Pick a match from the library.");
+  replayUnavailable("No match selected. Pick a match from the library.");
+} else {
+  loadMatch().then((r) => initReplay(r.meta, r.summary));
+}
+</script>
+</body>
+</html>

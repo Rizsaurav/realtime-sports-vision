@@ -22,6 +22,9 @@ engines/
 *.log
 .streamlit/
 
+# Node
+node_modules/
+
 # OS / editor
 .DS_Store
 .idea/
@@ -30,6 +33,10 @@ weights/
 
 # Live app model exports (licensed weights; regenerate with scripts/export_jersey_onnx.py)
 models/
+
+# JavaScript (installed with npm; do not commit)
+node_modules/
+package-lock.json
 
 # Small raw logs of the LLM serving experiments are part of the evidence
 !llm/results/

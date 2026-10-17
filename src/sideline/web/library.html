@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Match library · Sideline</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/pages.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="name">SIDELINE</span>
+  </div>
+  <h1 class="bar-title">Match library</h1>
+  <nav class="bar-nav" aria-label="Page">
+    <a class="navlink" href="/">Live viewer</a>
+  </nav>
+</header>
+
+<main class="page">
+  <div class="alert" id="alert" role="alert" hidden></div>
+  <p class="status" id="status" aria-live="polite"></p>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Upload recording</h2>
+    </div>
+    <form id="uploadForm" class="upload" autocomplete="off">
+      <div class="upload-row">
+        <input type="file" id="file" name="file" accept="video/*,.jsonl">
+        <input type="text" id="name" name="name" placeholder="Name (optional)" maxlength="120" spellcheck="false">
+        <button type="submit" class="btn primary" id="uploadBtn">Upload</button>
+      </div>
+      <div id="uploadProgress" class="upload-progress" hidden>
+        <div id="uploadProgressBar" class="upload-progress-bar"></div>
+      </div>
+      <p class="note" id="uploadNote">Recorded frames.jsonl files (the JSON-lines output of the headless runner) are accepted. The name is optional and only makes the match easier to find later.</p>
+    </form>
+  </section>
+
+  <section class="section" id="jobsSection" hidden>
+    <div class="section-head">
+      <h2>Video jobs</h2>
+    </div>
+    <div id="jobList" class="match-list"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>Matches</h2>
+    </div>
+    <div id="matchList" class="match-list"></div>
+  </section>
+</main>
+
+<script type="module">
+import { renderLibrary } from "/static/lib/render.js";
+
+const statusEl = document.getElementById("status");
+const alertEl = document.getElementById("alert");
+const listEl = document.getElementById("matchList");
+const form = document.getElementById("uploadForm");
+const fileInput = document.getElementById("file");
+const nameInput = document.getElementById("name");
+const uploadBtn = document.getElementById("uploadBtn");
+const noteEl = document.getElementById("uploadNote");
+const uploadProgress = document.getElementById("uploadProgress");
+const uploadProgressBar = document.getElementById("uploadProgressBar");
+const jobsSection = document.getElementById("jobsSection");
+const jobsEl = document.getElementById("jobList");
+
+// The video extensions the worker accepts (mirrored by the server check).
+const VIDEO_EXTENSIONS = [".avi", ".mkv", ".mov", ".mp4", ".webm"];
+// How often a video job is polled after the upload is accepted.
+const JOB_POLL_MS = 3000;
+// How many consecutive 5xx answers one job poll tolerates before the row
+// gives up. The server designs 5xx as retryable: it records no outcome
+// for them, the job stays resolvable and the next poll retries (e.g. the
+// worker restarting mid-poll).
+const MAX_JOB_POLL_ERRORS = 10;
+
+// limits: {max_upload_bytes, video_enabled, max_video_bytes} from
+// GET /api/limits; null until the first answer (or its failure).
+let limits = null;
+
+// The video job rows, keyed by job id. Entry: {row, nameEl, stateEl,
+// timer, stopped, busy, errors} (errors: consecutive 5xx poll answers).
+const jobs = new Map();
+
+// Set the shared status line text (a string). Returns nothing.
+function setStatus(text) {
+  statusEl.textContent = text;
+}
+
+// Show the page alert (role="alert") with a message string. Returns nothing.
+function showAlert(text) {
+  alertEl.textContent = text;
+  alertEl.hidden = false;
+}
+
+// Clear and hide the page alert. Returns nothing.
+function clearAlert() {
+  alertEl.textContent = "";
+  alertEl.hidden = true;
+}
+
+// Build the " : message" suffix for an error object; falls back to
+// "request failed". Output: a string.
+function errDetail(err) {
+  return ": " + (err && err.message ? err.message : "request failed") + ".";
+}
+
+// (filename) -> true when the name ends with one of the video extensions
+// (case-insensitive). Output: bool.
+function isVideoFile(filename) {
+  const name = String(filename || "").toLowerCase();
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) return false;
+  return VIDEO_EXTENSIONS.indexOf(name.slice(dot)) >= 0;
+}
+
+// (bytes) -> a short gigabyte size ("2 GB") for the video limit in the
+// note. Non-positive, non-finite input -> "" (the note skips the limit).
+function formatGigabytes(bytes) {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes <= 0) return "";
+  const gb = bytes / 1073741824;
+  return (gb >= 10 ? Math.round(gb) : Math.round(gb * 10) / 10) + " GB";
+}
+
+// Apply the /api/limits answer: the file picker's accepted types and the
+// note under the form depend on whether a worker is configured. With a
+// worker the picker also accepts the five video extensions and the note
+// says videos are processed on the GPU machine; without one the picker is
+// unchanged and the note says videos are not available.
+// Input: the limits object (anything). Returns nothing.
+function applyLimits(l) {
+  limits = l && typeof l === "object" ? l : null;
+  const enabled = !!(limits && limits.video_enabled);
+  fileInput.accept = enabled
+    ? "video/*,.jsonl," + VIDEO_EXTENSIONS.join(",")
+    : "video/*,.jsonl";
+  const tail = " The name is optional and only makes the match easier to find later.";
+  if (enabled) {
+    const max = limits && limits.max_video_bytes
+      ? " (up to " + formatGigabytes(limits.max_video_bytes) + ")"
+      : "";
+    noteEl.textContent = "Recorded frames.jsonl files (the JSON-lines output of the " +
+      "headless runner) and video recordings are accepted. Videos are processed on " +
+      "the GPU machine and may take several minutes" + max + "." + tail;
+  } else {
+    noteEl.textContent = "Recorded frames.jsonl files (the JSON-lines output of the " +
+      "headless runner) are accepted. Video processing is not available on this " +
+      "server, so a video cannot be turned into a match here." + tail;
+  }
+}
+
+// Load the server's limits once at start. On failure the page behaves as
+// if no worker were configured; a video upload then gets the server's own
+// error message. Returns nothing.
+async function loadLimits() {
+  try {
+    const res = await fetch("/api/limits", { headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error("the server answered " + res.status);
+    const l = await res.json();
+    applyLimits(l && typeof l === "object" ? l : { video_enabled: false });
+  } catch (err) {
+    applyLimits({ video_enabled: false });
+  }
+}
+
+// Load the match list from GET /api/matches (a JSON array) and render it
+// with renderLibrary, wiring deleteMatch as onDelete. Inputs: none.
+// Returns nothing (the list or an error alert is shown).
+async function loadMatches() {
+  clearAlert();
+  setStatus("Loading matches\u2026");
+  try {
+    const res = await fetch("/api/matches", { headers: { accept: "application/json" } });
+    if (!res.ok) throw new Error("the server answered " + res.status);
+    const matches = await res.json();
+    setStatus("");
+    renderLibrary(listEl, Array.isArray(matches) ? matches : (matches && Array.isArray(matches.items) ? matches.items : []), { onDelete: deleteMatch });
+  } catch (err) {
+    setStatus("");
+    showAlert("Could not load the match list" + errDetail(err));
+  }
+}
+
+// Delete one match after a confirm() dialog: DELETE /api/matches/<id>,
+// then reload the list. Input: the match id (any value, stringified for
+// the URL). Returns nothing.
+async function deleteMatch(id) {
+  if (!confirm("Delete this match? The recording and its analytics will be removed.")) return;
+  clearAlert();
+  setStatus("Deleting\u2026");
+  try {
+    const res = await fetch("/api/matches/" + encodeURIComponent(String(id)), { method: "DELETE" });
+    if (!res.ok) throw new Error("the server answered " + res.status);
+    await loadMatches();
+  } catch (err) {
+    setStatus("");
+    showAlert("Could not delete the match" + errDetail(err));
+  }
+}
+
+// Upload a video to the worker with XMLHttpRequest so the transfer
+// progress can be shown: POST /api/videos (multipart file and optional
+// name) with a progress bar; on 202 the job row starts polling, on any
+// other answer the server's own error message is shown in the alert.
+// Inputs: the picked File, the optional name string. Returns nothing.
+function uploadVideo(file, name) {
+  const body = new FormData();
+  body.append("file", file);
+  if (name) body.append("name", name);
+  uploadBtn.disabled = true;
+  clearAlert();
+  uploadProgress.hidden = false;
+  uploadProgressBar.style.width = "0%";
+  setStatus("Uploading " + file.name + "\u2026");
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/videos");
+  xhr.upload.addEventListener("progress", (event) => {
+    if (event.lengthComputable && event.total > 0) {
+      const pct = Math.min(100, Math.round((event.loaded / event.total) * 100));
+      uploadProgressBar.style.width = pct + "%";
+      setStatus("Uploading " + file.name + "\u2026 " + pct + "%");
+    }
+  });
+  xhr.addEventListener("load", () => {
+    uploadBtn.disabled = false;
+    uploadProgress.hidden = true;
+    setStatus("");
+    let payload = null;
+    try { payload = JSON.parse(xhr.responseText); } catch (err) { /* not JSON */ }
+    if (xhr.status >= 200 && xhr.status < 300 && payload && payload.job_id) {
+      startJobPolling(payload.job_id, file, name);
+    } else {
+      let message = payload && payload.error ? payload.error : "the server answered " + xhr.status;
+      if (xhr.status === 503) {
+        // The server's 503 text names the problem but not the fix; add it.
+        message += "; start the video worker and restart the library with its --worker flag, then try again";
+      }
+      showAlert("Video upload failed: " + message + ".");
+    }
+  });
+  xhr.addEventListener("error", () => {
+    uploadBtn.disabled = false;
+    uploadProgress.hidden = true;
+    setStatus("");
+    showAlert("Video upload failed: the video processing machine could not be reached. Check the connection and try again.");
+  });
+  xhr.send(body);
+}
+
+// Create (or return) the job row for one job and make the jobs section
+// visible. Inputs: the job id, the picked file, the optional name.
+// Returns: the job view object.
+function jobView(jobId, file, name) {
+  const existing = jobs.get(jobId);
+  if (existing) return existing;
+  const row = document.createElement("div");
+  row.className = "match-row job-row";
+  row.setAttribute("data-job-id", jobId);
+  const nameEl = document.createElement("span");
+  nameEl.className = "name";
+  nameEl.textContent = name || String(file.name).replace(/\.[^.]*$/, "") || "video";
+  const stateEl = document.createElement("span");
+  stateEl.className = "job-state";
+  stateEl.textContent = "queued";
+  row.append(nameEl, stateEl);
+  jobsEl.appendChild(row);
+  jobsSection.hidden = false;
+  const view = { row, nameEl, stateEl, timer: null, stopped: false, busy: false,
+                 errors: 0 };
+  jobs.set(jobId, view);
+  return view;
+}
+
+// Stop polling one job (final state reached). Input: the job id.
+// Returns nothing.
+function stopJob(jobId) {
+  const view = jobs.get(jobId);
+  if (!view) return;
+  view.stopped = true;
+  if (view.timer !== null) {
+    clearInterval(view.timer);
+    view.timer = null;
+  }
+}
+
+// Poll one job: fetch its status, update the row, stop on a final state
+// (done, failed, 404, or several consecutive 5xx in a row). A 5xx answer
+// is retryable by design on the server (no outcome is recorded and the
+// next poll retries), so polling keeps going while the row shows the
+// server's message.
+// Inputs: the job id. Returns nothing.
+async function pollJob(jobId) {
+  const view = jobs.get(jobId);
+  if (!view || view.stopped || view.busy) return;
+  view.busy = true;
+  let res;
+  try {
+    res = await fetch("/api/videos/" + encodeURIComponent(jobId), { headers: { accept: "application/json" } });
+  } catch (err) {
+    // No answer yet (network hiccup): keep polling on the next tick.
+    view.busy = false;
+    view.stateEl.textContent = "waiting for the processing machine\u2026";
+    return;
+  }
+  let payload = null;
+  try { payload = await res.json(); } catch (err) { /* not JSON */ }
+  if (!res.ok) {
+    const message = (payload && payload.error)
+      ? payload.error
+      : "the server answered " + res.status;
+    if (res.status >= 500) {
+      // Retryable server failure: keep polling and show the server's
+      // message meanwhile; stop only after several consecutive failures.
+      view.errors += 1;
+      if (view.errors >= MAX_JOB_POLL_ERRORS) {
+        stopJob(jobId);
+        view.stateEl.textContent = message;
+      } else {
+        view.stateEl.textContent = message + " (retrying\u2026)";
+      }
+      view.busy = false;
+      return;
+    }
+    // 4xx: the job is gone (404) or the request is bad - final for the row.
+    stopJob(jobId);
+    view.stateEl.textContent = message;
+    view.busy = false;
+    return;
+  }
+  view.errors = 0;
+  const st = payload && typeof payload === "object" ? payload : {};
+  if (st.name) view.nameEl.textContent = st.name;
+  if (st.status === "done") {
+    stopJob(jobId);
+    view.stateEl.textContent = "Done";
+    const open = document.createElement("a");
+    open.className = "open";
+    open.setAttribute("href", "/match.html?id=" + encodeURIComponent(String(st.match_id)));
+    open.textContent = "Open";
+    view.row.appendChild(open);
+    loadMatches();  // the new match joins the list
+  } else if (st.status === "failed") {
+    stopJob(jobId);
+    view.stateEl.textContent = st.error || "the processing machine failed the job";
+  } else if (st.status === "running") {
+    const pct = Math.round((typeof st.progress === "number" ? st.progress : 0) * 100);
+    view.stateEl.textContent = "Processing " + pct + "%";
+  } else if (st.status === "queued") {
+    view.stateEl.textContent = "Waiting in queue";
+  } else {
+    view.stateEl.textContent = String(st.status);
+  }
+  view.busy = false;
+}
+
+// Start polling a job: the first status fetch happens now, then every
+// JOB_POLL_MS until the job reaches a final state. Inputs: the job id,
+// the picked file, the optional name. Returns nothing.
+function startJobPolling(jobId, file, name) {
+  const view = jobView(jobId, file, name);
+  pollJob(jobId);
+  view.timer = setInterval(() => pollJob(jobId), JOB_POLL_MS);
+}
+
+// Upload form submit: a video goes to the worker (POST /api/videos with a
+// progress bar) when one is configured, everything else is posted as
+// multipart/form-data to POST /api/matches; on success the form is
+// cleared and the list reloaded, on failure the error is shown in the
+// alert. Input: a submit event (always prevented). Returns nothing.
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) {
+    showAlert("Pick a recording file to upload.");
+    return;
+  }
+  const name = nameInput.value.trim();
+  if (limits && limits.video_enabled && isVideoFile(file.name)) {
+    uploadVideo(file, name);
+    return;
+  }
+  const body = new FormData();
+  body.append("file", file);
+  if (name) body.append("name", name);
+
+  uploadBtn.disabled = true;
+  clearAlert();
+  setStatus("Uploading " + file.name + "\u2026");
+  try {
+    const res = await fetch("/api/matches", { method: "POST", body });
+    if (!res.ok) throw new Error("the server answered " + res.status);
+    form.reset();
+    setStatus("");
+    await loadMatches();
+  } catch (err) {
+    setStatus("");
+    showAlert("Upload failed" + errDetail(err));
+  } finally {
+    uploadBtn.disabled = false;
+  }
+});
+
+loadLimits();
+loadMatches();
+</script>
+</body>
+</html>
