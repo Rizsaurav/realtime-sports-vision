@@ -10,6 +10,46 @@ makes every decision causal, evaluates the system as a live one, and measures ho
 depends on the output delay, meaning how long the system may wait before committing an
 answer. The full write-up is in [`docs/REPORT.md`](docs/REPORT.md).
 
+## Live app
+
+`sideline serve` runs the whole system as a live application: a broadcast feed goes in and
+a browser shows the video with tracked players next to a top-down minimap, with team colours,
+jersey numbers, rosters and system telemetry.
+
+![Live viewer](docs/img/live_viewer.png)
+
+- **Sources:** a SoccerNet clip folder, a video file (played at real speed), an `rtsp://`,
+  `rtmp://` or `http(s)://` stream, or a YouTube/Twitch page URL (resolved with yt-dlp).
+- **Output delay:** live, 1 s, 5 s and 10 s are computed at the same time, so the delay
+  switch in the viewer is instant. A longer delay shows the game later but commits more
+  jersey numbers and steadier teams.
+- **Decisions:** `src/sideline/decisions.py` is the streaming form of the research
+  decision code. Replaying the validation perception cache through it gives the same
+  live GS-HOTA as the batch code (29.54), with identical attributes on 99.96% of boxes.
+- **Accuracy of the app itself:** running the live app on all 58 validation clips
+  (`scripts/eval_live.py`, synchronous keyframe calibration) gives GS-HOTA 29.6 live,
+  31.5 at 1 s, 34.3 at 5 s and 36.2 at 10 s, in line with the research pipeline.
+- **Long matches:** memory is bounded, and team sides are judged over the last 3 minutes,
+  so the minimap follows the half-time switch of ends.
+
+```bash
+# once: install the app and export the jersey models from the jersey env
+pip install -e ".[live]"
+/path/to/jersey-env/bin/python scripts/export_jersey_onnx.py --out models/jersey
+
+# on the GPU machine (model paths in configs/live.yaml)
+sideline serve --config configs/live.yaml            # http://127.0.0.1:8000
+
+# from a laptop: forward the port, then open http://localhost:8000
+ssh -N -L 8000:127.0.0.1:8000 <gpu-host>
+
+# headless: one source to JSON lines (one object per frame)
+sideline run match.mp4 --delay 5 --out match.jsonl
+```
+
+The first start builds TensorRT engines for the jersey models (about a minute). The
+viewer binds to localhost only; use an SSH tunnel to reach it from another machine.
+
 ## Results
 
 SoccerNet-GSR, official GS-HOTA. Test is the 49-clip public test split, with every setting
@@ -95,19 +135,22 @@ Analysis scripts: `gsr_oracle_ladder.py` (error budget), `gsr_oracle_swap.py` (o
 attribute swaps), `gsr_team_eval.py` and `gsr_jersey_eval.py` (component curves),
 `sweep_trackers.py` (tracker sweep on cached detections), `gsr_bootstrap.py` (clip-level
 confidence intervals and paired tests), `bench_gsr_stages.py` and
-`bench_jersey_stage.py` (per-stage latency).
+`bench_jersey_stage.py` (per-stage latency). For the live app, `check_streaming.py`
+replays a perception cache through the streaming decision engine and compares it with the
+batch decisions, and `eval_live.py` scores the full live pipeline with the official evaluator.
 
 ## Repo layout
 
 ```
 scripts/        experiments, evaluation, benchmarks, report generation
 src/
+  sideline/     the live app: sources, pipeline, streaming decisions, jersey reader, server, web viewer
   benchmark/    TrackEval / COCO evaluation, timing with idle-GPU gating
   calibration/  optical-flow homography propagation and shared camera motion
   data/         SportsMOT / SoccerNet loaders
   models/       detector wrapper (YOLO26, RT-DETR, custom weights)
   tracking/     tracker wrapper
-configs/        detector and benchmark configs
+configs/        live app (live.yaml), detector and benchmark configs
 docs/
   REPORT.md     technical report (results, ablations, limitations)
   report/       generated tables, figures and data.json

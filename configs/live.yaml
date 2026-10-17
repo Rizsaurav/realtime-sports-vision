@@ -1,0 +1,31 @@
+# Sideline live app. Paths are relative to the repo root unless absolute.
+models:
+  detector: engines/det_yolo26s_1280_fp16.engine     # or runs/finetune/yolo26s_gsr_1280/weights/best.pt
+  pose: engines/pose_yolo26s_1280_fp16.engine        # or yolo26s-pose.pt; empty = box-based torso crops
+  imgsz: 1280
+  calibrator:                                        # PnLCalib (GPL-2.0, research use)
+    repo: /data/saurav/repos/PnLCalib
+    keypoints: /data/saurav/repos/calib_weights/SV_kp
+    lines: /data/saurav/repos/calib_weights/SV_lines
+  jersey:                                            # from scripts/export_jersey_onnx.py (non-commercial)
+    dir: models/jersey
+    min_height: 40
+    legibility: 0.3
+    read_conf: 0.97
+
+pipeline:
+  det_conf: 0.1
+  keyframe_every: 10          # frames between calibrator runs
+  preview_width: 960          # width of the JPEG preview sent to viewers
+
+decisions:
+  delays: [0, 25, 125, 250]   # output delays computed in parallel, frames at 25 FPS
+  tau: 4.0
+  ratio: 0.6
+  role_window: 25
+  stitch: {max_gap: 150, v_max: 0.4, d0: 2.0, feat_thr: 3.0}
+
+server:
+  host: 127.0.0.1
+  port: 8000
+  media_dirs: [data/raw/soccernet/gsr/test, data/videos]   # offered as sources in the UI
