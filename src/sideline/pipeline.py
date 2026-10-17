@@ -30,9 +30,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # src/ for cal
 
 from calibration.propagation import HomographyPropagator  # noqa: E402
 
+from .calibration_guard import CalibrationGuard, filter_foot_points  # noqa: E402
 from .decisions import DecisionEngine  # noqa: E402
 from .geometry import foot_points, project, torso_feature  # noqa: E402
-from .sources import RATE, Source  # noqa: E402
+from .sources import RATE, SIZE, Source  # noqa: E402
 
 NAMES = {0: "player", 1: "goalkeeper", 2: "referee", 3: "ball"}
 STOP = object()
@@ -47,6 +48,38 @@ class SharedCMC:
 
     def reset(self):
         self.H = np.eye(2, 3, dtype=np.float32)
+
+
+class _CalibState:
+    """Calibration state carried across cpu-stage frames.
+
+    The per-frame motions (used to propagate a keyframe homography forward to
+    the current frame), the carried homography, keyframe scheduling and the
+    guard bookkeeping.  Plain state plus small methods, so the guard wiring
+    can be exercised without a video or a calibrator process.
+    """
+
+    def __init__(self, keyframe_k):
+        self.keyframe_k = keyframe_k
+        self.motions = {}            # frame idx -> 2x3 motion, or None
+        self.H_cur = None            # carried homography, propagated per frame
+        self.H_from = None           # keyframe idx the carry started from
+        self.last_req = None         # frame idx of the last keyframe request
+        self.last_offered = None     # last keyframe idx offered to the guard
+        self.H_last = None           # last accepted homography (feeds the output)
+        self.strict = False          # foot filter on: last acceptance was by the full rule
+
+    def motion(self, idx, M):
+        """Record one frame's motion estimate, pruning what is no longer needed."""
+        self.motions[idx] = M
+        for j in [j for j in self.motions if j < idx - 4 * self.keyframe_k - 10]:
+            del self.motions[j]
+
+    def carry(self, M):
+        """Advance the carried homography one frame.  A missing motion is a
+        one-frame propagation miss, not a lost calibration, so H_cur is kept."""
+        if self.H_cur is not None and M is not None:
+            self.H_cur = self.H_cur @ M
 
 
 class Models:
@@ -86,6 +119,7 @@ class Stats:
         self.stage = collections.defaultdict(lambda: collections.deque(maxlen=n))
         self.frames = self.dropped = self.keyframes = 0
         self.calibrated = False
+        self.rejected_calibrations = self.accepted_calibrations = 0
 
     def snapshot(self):
         d = list(self.done)
@@ -95,6 +129,8 @@ class Stats:
                 "latency_ms_p95": round(float(np.percentile(lat, 95)), 1),
                 "frames": self.frames, "dropped": self.dropped, "keyframes": self.keyframes,
                 "calibrated": self.calibrated,
+                "rejected_calibrations": self.rejected_calibrations,
+                "accepted_calibrations": self.accepted_calibrations,
                 "stage_ms": {k: round(float(np.median(v)), 1) for k, v in self.stage.items() if v}}
 
 
@@ -136,10 +172,14 @@ class LivePipeline:
                                           stitch=self.dcfg.get("stitch")) for d in self.delays}
         self.q_gpu, self.q_cpu = queue.Queue(2), queue.Queue(4)
         self.q_jer, self.q_dec = queue.Queue(4), queue.Queue(8)
+        self.cal_guard = CalibrationGuard()
+        self.cal = _CalibState(self.keyframe_k)
         self.cal_results, self.cal_lock, self.cal_sent, self.cal_pending = {}, threading.Lock(), {}, 0
         self.running = True
         stages = [self._source, self._gpu, self._cpu, self._jersey, self._decide]
-        if self.m.calib:
+        if self.m.calib and not self.sync_calib:
+            # in sync mode _cpu is the sole consumer of the calibrator queue
+            # (blocking homography()); a second draining stage would race it
             stages.append(self._calib)
         self.threads = [threading.Thread(target=self._guard, args=(f,), daemon=True, name=f.__name__)
                         for f in stages]
@@ -183,7 +223,7 @@ class LivePipeline:
                     try:
                         q.get_nowait()
                     except queue.Empty:
-                        pass
+                        continue
         return False
 
     # -- stages ------------------------------------------------------------------
@@ -251,7 +291,7 @@ class LivePipeline:
         shared = SharedCMC()
         trk.cmc = shared
         prop = HomographyPropagator()
-        motions, H_cur, H_from, prev_boxes, last_req, H_last = {}, None, None, None, None, None
+        cal, prev_boxes = self.cal, None
         while True:
             item = self.q_cpu.get()
             if item is STOP:
@@ -259,73 +299,122 @@ class LivePipeline:
             idx, frame, t_in, (xyxy, conf, cls), pose = item
             t0 = time.perf_counter()
             M = prop.motion(frame, prev_boxes)
-            motions[idx] = M
+            cal.motion(idx, M)
             shared.H = prop.cmc_affine(M)
+            cal.carry(M)
             people = cls != 3
             out = trk.update(sv.Detections(xyxy=xyxy[people].astype(np.float32),
                                            confidence=conf[people].astype(np.float32),
                                            class_id=cls[people]), frame)
             prev_boxes = out.xyxy
-            # calibration: carry the current homography one step, then take a newer keyframe if done
-            if H_cur is not None:
-                H_cur = H_cur @ M if M is not None else None
             if self.m.calib:
-                due = last_req is None or idx - last_req >= self.keyframe_k or (H_cur is None and M is None)
-                if due and self.sync_calib:
-                    small = cv2.resize(frame, (960, 540), interpolation=cv2.INTER_AREA)
-                    H_sync = self.m.calib.homography(small, (self.run_id, idx))
-                    with self.cal_lock:
-                        self.cal_results[idx] = H_sync
-                    self.stats.keyframes += 1
-                    last_req = idx
-                elif due:
-                    if self.m.calib.request((self.run_id, idx), cv2.resize(frame, (960, 540), interpolation=cv2.INTER_AREA)):
-                        self.cal_sent[idx] = time.perf_counter()
-                        self.cal_pending += 1
-                        last_req = idx
-                with self.cal_lock:
-                    done = [k for k, H in self.cal_results.items() if H is not None and (H_from is None or k > H_from)]
-                    k = max(done) if done else None
-                    Hk = self.cal_results[k] if k is not None else None
-                    for old in [j for j in self.cal_results if j < idx - 4 * self.keyframe_k]:
-                        del self.cal_results[old]
-                if k is not None:
-                    H = Hk
-                    for j in range(k + 1, idx + 1):
-                        if j not in motions:              # dropped frame: no motion recorded
-                            continue
-                        if motions[j] is None:
-                            H = None
-                            break
-                        H = H @ motions[j]
-                    if H is not None:
-                        H_cur, H_from = H, k
-            for j in [j for j in motions if j < idx - 4 * self.keyframe_k - 10]:
-                del motions[j]
-            self.stats.calibrated = H_cur is not None
-            if H_cur is not None:
-                H_last = H_cur
-            H_use = H_last                                # last good calibration until a new one
-            rows = []
-            if out.tracker_id is not None:
-                for b, tid, c, sc in zip(out.xyxy, out.tracker_id, out.class_id, out.confidence):
-                    if tid is None or tid < 0:
-                        continue
-                    x1, y1, x2, y2 = map(float, b)
-                    f = torso_feature(frame, x1, y1, x2 - x1, y2 - y1)
-                    rows.append({"track": int(tid), "cls": NAMES[int(c)], "score": float(sc),
-                                 "bbox": [x1, y1, x2 - x1, y2 - y1],
-                                 "pitch": foot_points(H_use, x1, y1, x2 - x1, y2 - y1) if H_use is not None else None,
-                                 "feat": None if f is None else f.tolist()})
-            ball = None
-            bm = np.flatnonzero(~people)
-            if len(bm):
-                b = xyxy[bm[int(conf[bm].argmax())]]
-                ball = {"bbox": [float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1])], "pitch": None}
-                if H_use is not None:
-                    ball["pitch"] = project(H_use, [((b[0] + b[2]) / 2, b[3])])[0].tolist()
+                self._schedule_keyframe(idx, frame, M is not None)
+                picked = self._pick_next_calibration(idx)
+                if picked is not None:
+                    Hk, k = picked
+                    H_new, dec = self._apply_guard(Hk, cal.H_cur, M is not None)
+                    cal.last_offered = k                       # a keyframe is offered once
+                    if dec in ("accepted_first", "accepted", "accepted_confirmed"):
+                        cal.H_cur, cal.H_from = H_new, k
+                        cal.strict = dec != "accepted_first"   # lenient first: no foot filtering
+                    else:  # rejected_jump or rejected_invalid: ask again next frame
+                        cal.last_req = idx - self.keyframe_k + 1
+            self.stats.calibrated = cal.H_cur is not None
+            if cal.H_cur is not None:
+                cal.H_last = cal.H_cur
+            H_use = cal.H_last                               # last good calibration until a new one
+            rows = self._project_people(frame, out, H_use, cal.strict)
+            ball = self._project_ball(xyxy, conf, people, H_use)
             self.stats.stage["cpu"].append((time.perf_counter() - t0) * 1000)
             self._put(self.q_jer, (idx, frame, t_in, rows, pose, ball, H_use))
+
+    def _schedule_keyframe(self, idx, frame, moving):
+        """Request (or, in sync mode, run) a keyframe calibration when due: the
+        first frame, every keyframe_k frames, or while no calibration is
+        carried and no motion was estimated this frame."""
+        st = self.cal
+        if not (st.last_req is None or idx - st.last_req >= self.keyframe_k
+                or (st.H_cur is None and not moving)):
+            return
+        small = cv2.resize(frame, (960, 540), interpolation=cv2.INTER_AREA)
+        if self.sync_calib:
+            with self.cal_lock:
+                self.cal_results[idx] = self.m.calib.homography(small, (self.run_id, idx))
+            self.stats.keyframes += 1
+            st.last_req = idx
+        elif self.m.calib.request((self.run_id, idx), small):
+            self.cal_sent[idx] = time.perf_counter()
+            self.cal_pending += 1
+            st.last_req = idx
+
+    def _pick_next_calibration(self, idx):
+        """The newest keyframe result not yet offered to the guard,
+        propagated to frame idx with the recorded motions: (H_candidate, k)
+        or None when none is offerable yet.  A motion gap inside the window
+        stops the propagation at the gap instead of discarding the
+        candidate: a sustained flow failure (blank or static frames, a long
+        camera cut) must not withhold a valid calibration forever, and
+        cal.carry() resumes the carry once motion returns."""
+        with self.cal_lock:
+            off = self.cal.last_offered
+            done = [k for k, H in self.cal_results.items()
+                    if H is not None and (off is None or k > off)]
+            k = max(done) if done else None
+            Hk = self.cal_results[k] if k is not None else None
+            for old in [j for j in self.cal_results if j < idx - 4 * self.keyframe_k]:
+                del self.cal_results[old]
+        if k is None:
+            return None
+        H = Hk
+        for j in range(k + 1, idx + 1):
+            if j not in self.cal.motions:        # dropped frame: no motion recorded
+                continue
+            if self.cal.motions[j] is None:
+                break                            # motion gap: offer up to the gap
+            H = H @ self.cal.motions[j]
+        return H, k
+
+    def _apply_guard(self, H_candidate, H_cur, moving):
+        """Offer one keyframe homography to the guard; returns (H_to_use,
+        decision) and updates the calibration counters."""
+        H_new, dec = self.cal_guard.update(H_candidate, H_cur, SIZE, moving=moving)
+        if dec in ("accepted_first", "accepted", "accepted_confirmed"):
+            self.stats.accepted_calibrations += 1
+        else:                                    # rejected_invalid / rejected_jump
+            self.stats.rejected_calibrations += 1
+        return H_new, dec
+
+    def _project_people(self, frame, out, H_use, strict=True):
+        """One output row per tracked box: feet on the pitch (None when any
+        foot is outside the pitch extended by 15 m, but only while the
+        current calibration was accepted by the full rule; a lenient first
+        acceptance keeps everyone on the minimap) and the torso feature."""
+        rows = []
+        if out.tracker_id is None:
+            return rows
+        for b, tid, c, sc in zip(out.xyxy, out.tracker_id, out.class_id, out.confidence):
+            if tid is None or tid < 0:
+                continue
+            x1, y1, x2, y2 = map(float, b)
+            f = torso_feature(frame, x1, y1, x2 - x1, y2 - y1)
+            pitch = foot_points(H_use, x1, y1, x2 - x1, y2 - y1) if H_use is not None else None
+            if pitch is not None and strict and not all(filter_foot_points(pitch)):
+                pitch = None                     # a foot outside pitch + 15 m
+            rows.append({"track": int(tid), "cls": NAMES[int(c)], "score": float(sc),
+                         "bbox": [x1, y1, x2 - x1, y2 - y1],
+                         "pitch": pitch,
+                         "feat": None if f is None else f.tolist()})
+        return rows
+
+    def _project_ball(self, xyxy, conf, people, H_use):
+        ball = None
+        bm = np.flatnonzero(~people)
+        if len(bm):
+            b = xyxy[bm[int(conf[bm].argmax())]]
+            ball = {"bbox": [float(b[0]), float(b[1]), float(b[2] - b[0]), float(b[3] - b[1])], "pitch": None}
+            if H_use is not None:
+                ball["pitch"] = project(H_use, [((b[0] + b[2]) / 2, b[3])])[0].tolist()
+        return ball
 
     def _jersey(self):
         while True:
